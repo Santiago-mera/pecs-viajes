@@ -112,10 +112,10 @@
         <input type="text" id="authRole" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. Chofer / Supervisor">
       </div>
       <div>
-        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nivel de Permiso *</label>
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nivel de Permiso (asignado por el sistema)</label>
         <select id="authPermission" class="w-full text-xs p-2 border border-slate-300 rounded outline-none bg-white">
           <option value="USER">Conductor / Operativo (Edita sus viajes)</option>
-          <option value="ADMIN">Supervisor / Administrador (Acceso total)</option>
+          
         </select>
       </div>
       <button onclick="saveUserSession()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded text-xs shadow">Guardar Identificación</button>
@@ -296,19 +296,20 @@
     // CONFIGURACIÓN DE FIREBASE (PEGA TUS LLAVES AQUÍ O USA ESTAS DE PRUEBA)
     // =========================================================================
     const firebaseConfig = {
-      apiKey: "AIzaSyDummyKeyForTestingOnly12345",
-      authDomain: "pecs-viajes-app.firebaseapp.com",
-      projectId: "pecs-viajes-app",
-      storageBucket: "pecs-viajes-app.appspot.com",
-      messagingSenderId: "123456789012",
-      appId: "1:123456789012:web:abcdef123456"
-    };
-
+  apiKey: "AIzaSyBzKk-DRT5Q8NPUADp4tz3cl4SlMPhxOoU",
+  authDomain: "pecs-viajes-app-ae198.firebaseapp.com",
+  databaseURL: "https://pecs-viajes-app-ae198-default-rtdb.firebaseio.com",
+  projectId: "pecs-viajes-app-ae198",
+  storageBucket: "pecs-viajes-app-ae198.firebasestorage.app",
+  messagingSenderId: "182123688537",
+  appId: "1:182123688537:web:9e0fa31f598c0000fef748"
+};
     // Inicialización de Firebase
     let db = null;
     let tripsCollection = null;
 
     try {
+      if (firebaseConfig.apiKey.startsWith('REEMPLAZAR_')) throw new Error('Configure Firebase antes de utilizar la aplicación.');
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       tripsCollection = collection(db, "viajes_pecs");
@@ -335,19 +336,23 @@
 
     } catch(e) {
       console.error("Falta configurar credenciales de Firebase", e);
+      document.getElementById('cloudStatusText').textContent = 'Firebase sin configurar. Contacte al administrador.';
+      document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-red-500';
     }
 
     // Exponer función de guardado a Firebase en el ámbito global
     window.saveTripToFirebase = async function(tripData) {
       if(!db) {
         alert("Atención: Firebase no está configurado.");
-        return;
+        return false;
       }
       try {
         const docRef = doc(db, "viajes_pecs", tripData.id);
         await setDoc(docRef, tripData, { merge: true });
+        return true;
       } catch (err) {
         alert("Error al guardar en la nube: " + err.message);
+        return false;
       }
     };
   </script>
@@ -355,6 +360,8 @@
   <!-- LÓGICA DE LA APLICACIÓN -->
   <script>
     let currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+    // Las sesiones locales no acreditan privilegios administrativos.
+    if (currentUser) currentUser.permission = 'USER';
     window.trips = [];
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -366,7 +373,7 @@
         document.getElementById('authDni').value = currentUser.dni || '';
         document.getElementById('authName').value = currentUser.name || '';
         document.getElementById('authRole').value = currentUser.role || '';
-        document.getElementById('authPermission').value = currentUser.permission || 'USER';
+        document.getElementById('authPermission').value = 'USER';
       }
       document.getElementById('authModal').classList.remove('hidden');
     }
@@ -375,7 +382,7 @@
       const dni = document.getElementById('authDni').value.trim();
       const name = document.getElementById('authName').value.trim();
       const role = document.getElementById('authRole').value.trim();
-      const permission = document.getElementById('authPermission').value;
+      const permission = 'USER'; // La interfaz pública nunca concede ADMIN
 
       if(!dni || !name || !role) {
         alert('Por favor complete todos los campos de identificación.');
@@ -480,7 +487,7 @@
       const t = window.trips.find(x => x.id === id);
       if(!t) return;
 
-      if(currentUser && currentUser.permission !== 'ADMIN' && t.createdDni !== currentUser.dni && t.nombreConductor !== currentUser.name) {
+      if(!currentUser || (t.createdDni !== currentUser.dni)) {
         alert('SEGURIDAD: No está autorizado para modificar un viaje registrado por otro usuario.');
         return;
       }
@@ -526,6 +533,13 @@
         return;
       }
 
+      const status = document.getElementById('estadoViaje').value;
+      const departureValue = document.getElementById('fechaSalida').value;
+      const arrivalValue = document.getElementById('fechaLlegadaReal').value;
+      if (status === 'CERRADO' && (!arrivalValue || !Number.isFinite(new Date(arrivalValue).getTime()) || new Date(arrivalValue) < new Date(departureValue) || new Date(arrivalValue) > new Date())) {
+        alert('Para cerrar el viaje, registre una llegada válida, posterior a la salida y no futura.');
+        return;
+      }
       const id = document.getElementById('formId').value || 'TRIP-' + Date.now();
       const isNew = !document.getElementById('formId').value;
 
@@ -561,8 +575,8 @@
         updatedAt: new Date().toISOString()
       };
 
-      await window.saveTripToFirebase(tripData);
-      closeTripModal();
+      const saved = await window.saveTripToFirebase(tripData);
+      if (saved) closeTripModal();
     }
 
     function renderTable() {
@@ -632,7 +646,7 @@
         "N°": index + 1,
         "N° PECS": t.pecsNum,
         "ESTADO VIAJE": t.estado === 'EN_CURSO' ? 'EN CURSO' : 'FINALIZADO',
-        "FECHA SALIDA": t.fechaSalida ? new Date(t.fechaSalidaconv).toLocaleString() : 'N/A',
+        "FECHA SALIDA": t.fechaSalida ? new Date(t.fechaSalida).toLocaleString() : 'N/A',
         "LÍMITE ESTIMADO": t.fechaSalida ? new Date(new Date(t.fechaSalida).getTime() + (parseInt(t.duracionEstimada || 24) * 3600000)).toLocaleString() : 'N/A',
         "FECHA RETORNO REAL": t.fechaLlegadaReal ? new Date(t.fechaLlegadaReal).toLocaleString() : 'PENDIENTE',
         "CONDUCTOR": t.nombreConductor,
