@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciamiento de Viajes - PECS RE-LOG-01 (En Vivo)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SheetJS para Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printableArea, #printableArea * { visibility: visible; }
+      #printableArea { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 p-2 sm:p-6">
+
+  <!-- BARRA SUPERIOR DE AUTENTICACIÓN Y ESTADO DE CONEXIÓN -->
+  <header class="max-w-6xl mx-auto bg-white p-4 rounded-xl shadow-sm border border-slate-300 mb-6 flex flex-wrap justify-between items-center gap-4 no-print">
+    <div class="flex items-center gap-3">
+      <div class="bg-blue-800 text-white font-black px-3 py-1.5 rounded text-sm flex items-center gap-2">
+        PECS
+        <span id="cloudStatus" class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" title="Conectando a la nube..."></span>
+      </div>
+      <div>
+        <h1 class="font-bold text-sm text-slate-900">Sistema PECS RE-LOG-01</h1>
+        <p id="cloudStatusText" class="text-xs text-amber-600 font-medium">Sincronizando con base de datos en tiempo real...</p>
+      </div>
+    </div>
+
+    <!-- ESTADO DE SESIÓN LOCAL -->
+    <div class="flex items-center gap-3">
+      <div id="userBadge" class="hidden text-xs bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-300 flex items-center gap-2">
+        <i class="fa-solid fa-user-shield text-blue-600"></i>
+        <div>
+          <span id="lblUserName" class="font-bold text-slate-800"></span>
+          <span id="lblUserRole" class="text-[10px] text-slate-500 block"></span>
+        </div>
+        <button onclick="logout()" class="ml-2 text-red-600 hover:text-red-800 text-xs font-bold"><i class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+      <button id="btnLogin" onclick="openAuthModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow">
+        <i class="fa-solid fa-id-card mr-1"></i> Identificarse (Usuario / Chofer)
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR DE ALERTAS DE RETORNO VENCIDO / PRÓXIMO -->
+  <div id="alertsBanner" class="max-w-6xl mx-auto mb-4 hidden no-print"></div>
+
+  <!-- PANEL DE GESTIÓN Y ACCIONES RÁPIDAS -->
+  <div class="max-w-6xl mx-auto bg-white p-4 rounded-xl shadow-sm border border-slate-300 mb-6 flex flex-wrap justify-between items-center gap-4 no-print">
+    <div class="flex gap-2">
+      <button onclick="openNewTripModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+        <i class="fa-solid fa-plus"></i> Nueva Solicitud de Viaje (Fase 1)
+      </button>
+      <button onclick="exportToExcelFormatted()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+        <i class="fa-solid fa-file-excel"></i> Exportar a Excel Formateado (.xlsx)
+      </button>
+    </div>
+    <div class="flex gap-2 w-full sm:w-auto">
+      <input type="text" id="searchInput" oninput="renderTable()" placeholder="Buscar por PECS, Conductor, Placa..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 outline-none w-full sm:w-64">
+      <select id="filterStatus" onchange="renderTable()" class="text-xs border border-slate-300 rounded-lg px-2 py-2 outline-none bg-slate-50">
+        <option value="ALL">Todos</option>
+        <option value="EN_CURSO">En Curso</option>
+        <option value="CERRADO">Cerrados</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- TABLA DE REGISTROS EN VIVO -->
+  <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden mb-8 no-print">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-100 text-slate-700 border-b border-slate-300 font-bold">
+          <tr>
+            <th class="p-3">N° PECS</th>
+            <th class="p-3">Motivo / Proyecto</th>
+            <th class="p-3">Conductor / Placa</th>
+            <th class="p-3">Salida & Límite Estimado</th>
+            <th class="p-3">Estado</th>
+            <th class="p-3">Registrado por</th>
+            <th class="p-3 text-center">Acciones (Cierre / Ver)</th>
+          </tr>
+        </thead>
+        <tbody id="tripsTableBody" class="divide-y divide-slate-200">
+          <tr><td colspan="7" class="text-center p-6 text-slate-400">Cargando base de datos en vivo...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
+  <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden no-print">
+    <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+      <h3 class="font-bold text-sm text-slate-900 border-b pb-2"><i class="fa-solid fa-user-lock text-blue-600 mr-2"></i> Identificación de Usuario</h3>
+      <p class="text-xs text-slate-500">Ingrese su documento de identidad y nombre para validar autorizaciones de viaje.</p>
+      <div>
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Cédula / Documento *</label>
+        <input type="text" id="authDni" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. 1314012345">
+      </div>
+      <div>
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nombres y Apellidos *</label>
+        <input type="text" id="authName" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. Carlos Mendoza">
+      </div>
+      <div>
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Rol / Cargo *</label>
+        <input type="text" id="authRole" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. Chofer / Supervisor">
+      </div>
+      <div>
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nivel de Permiso *</label>
+        <select id="authPermission" class="w-full text-xs p-2 border border-slate-300 rounded outline-none bg-white">
+          <option value="USER">Conductor / Operativo (Edita sus viajes)</option>
+          <option value="ADMIN">Supervisor / Administrador (Acceso total)</option>
+        </select>
+      </div>
+      <button onclick="saveUserSession()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded text-xs shadow">Guardar Identificación</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE FORMULARIO PECS RE-LOG-01 -->
+  <div id="tripModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 z-40 overflow-y-auto hidden no-print">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full my-6 p-6 space-y-6 text-xs">
+      
+      <div class="flex justify-between items-center border-b pb-3">
+        <div>
+          <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px]">DOCUMENTO No. PECS-RE-LOG-01</span>
+          <h2 id="modalTitle" class="font-bold text-base text-slate-900 mt-1">Gerenciamiento de Viajes (Solicitud de Salida y Retorno)</h2>
+        </div>
+        <button onclick="closeTripModal()" class="text-slate-400 hover:text-slate-700 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="pecsForm" onsubmit="saveTrip(event)" class="space-y-4">
+        <input type="hidden" id="formId">
+
+        <!-- ENCABEZADO SUPERIOR -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+          <div>
+            <label class="font-bold text-slate-700">N° PECS:</label>
+            <input type="text" id="pecsNum" required class="w-full mt-1 p-1.5 border rounded font-bold text-red-600 bg-white" placeholder="0081215">
+          </div>
+          <div class="md:col-span-2">
+            <label class="font-bold text-slate-700">Motivo del Viaje:</label>
+            <input type="text" id="motivo" required class="w-full mt-1 p-1.5 border rounded bg-white">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700">Proyecto:</label>
+            <input type="text" id="proyecto" required class="w-full mt-1 p-1.5 border rounded bg-white">
+          </div>
+        </div>
+
+        <!-- FASE 1: SALIDA -->
+        <div class="border border-blue-200 bg-blue-50/20 p-3 rounded space-y-3">
+          <h3 class="font-bold text-blue-900 border-b border-blue-200 pb-1 text-xs flex justify-between">
+            <span><i class="fa-solid fa-plane-departure mr-1"></i> FASE 1: Datos de Salida (Llenado por Solicitante/Chofer)</span>
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Lugar de Salida:</label>
+              <input type="text" id="lugarSalida" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Lugar de Llegada (Destino):</label>
+              <input type="text" id="lugarLlegada" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Fecha y Hora Salida:</label>
+              <input type="datetime-local" id="fechaSalida" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 text-blue-700">Duración Estimada Viaje:</label>
+              <select id="duracionEstimada" required onchange="calculateRisk()" class="w-full mt-1 p-1.5 border rounded font-bold bg-white">
+                <option value="6">6 Horas</option>
+                <option value="12">12 Horas</option>
+                <option value="24" selected>1 Día (24 Horas)</option>
+                <option value="48">2 Días (48 Horas)</option>
+                <option value="72">3 Días (72 Horas)</option>
+                <option value="120">5 Días (120 Horas)</option>
+                <option value="168">1 Semana (168 Horas)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Tipo de Vehículo:</label>
+              <input type="text" id="tipoVehiculo" required class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Ej. Camioneta 4x4">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Número de Placa:</label>
+              <input type="text" id="placa" required class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Ej. MBA-1234">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Pre Inspección (S/N):</label>
+              <select id="preInspeccion" class="w-full mt-1 p-1.5 border rounded bg-white">
+                <option value="SI">SI</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">N° Pasajeros:</label>
+              <input type="number" id="numPasajeros" min="1" value="1" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Vehículo Satelital (S/N):</label>
+              <select id="satelital" class="w-full mt-1 p-1.5 border rounded bg-white">
+                <option value="SI">SI</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Nombre del Conductor:</label>
+              <input type="text" id="nombreConductor" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Supervisor a Cargo:</label>
+              <input type="text" id="supervisor" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- MATRIZ DE RIESGOS -->
+        <div class="border border-slate-300 p-3 rounded space-y-2 bg-white">
+          <div class="flex justify-between items-center border-b pb-1">
+            <span class="font-bold text-slate-800">Condiciones para Determinar el Nivel de Riesgo y Aprobación</span>
+            <span id="scoreBadge" class="font-black bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">0 Pts</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <select id="r1" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">1. Normal (0 pts)</option><option value="5">1. Se requiere acompañante / otro chofer (5 pts)</option></select>
+            <select id="r2" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">2. Clima Normal (0 pts)</option><option value="1">2. Lluvioso (1 pt)</option><option value="2">2. Neblina / Viento / Polvo (2 pts)</option></select>
+            <select id="r3" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">3. Comunicaciones en todo el trayecto (1 pt)</option><option value="3">3. Sin medio pero viaja con otro vehículo (3 pts)</option><option value="5">3. Sin medio de comunicación y viaja solo (5 pts)</option></select>
+            <select id="r4" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">4. Carga Normal (0 pts)</option><option value="1">4. Extra dimensional / pesada (1 pt)</option><option value="2">4. Requiere vehículo guía (2 pts)</option><option value="5">4. Desecho peligroso / permiso (5 pts)</option></select>
+            <select id="r5" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="3">5. Menos de 200 km (3 pts)</option><option value="5">5. Más de 200 km (5 pts)</option></select>
+            <select id="r6" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">6. Conductor nuevo en ruta (1 pt)</option><option value="3">6. Vías doble sentido / estrechas / barro (3 pts)</option><option value="5">6. Cruce en barcazas / gabarras (5 pts)</option></select>
+            <select id="r7" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">7. Manejo diurno (0 pts)</option><option value="3">7. Manejo nocturno 11h00-14h00 / 03h00-04h30 (3 pts)</option><option value="8">7. Manejo nocturno 19h30-04h30 - Excepción (8 pts)</option></select>
+            <select id="r8" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">8. Horas normales (0 pts)</option><option value="8">8. Viaje excede 16 horas acumuladas (8 pts)</option></select>
+          </div>
+          <div id="gerenciaWarning" class="hidden bg-red-100 text-red-800 p-2 rounded text-[11px] font-bold">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i> El puntaje supera los 30 puntos. Se requiere Autorización Excepcional Gerencial obligatoria.
+          </div>
+        </div>
+
+        <!-- FASE 2: RETORNO Y CIERRE -->
+        <div id="fase2Box" class="border border-emerald-300 bg-emerald-50/30 p-3 rounded space-y-3">
+          <h3 class="font-bold text-emerald-900 border-b border-emerald-200 pb-1 text-xs">
+            <i class="fa-solid fa-plane-arrival mr-1"></i> FASE 2: Registro de Retorno y Cierre (Completar al Regresar)
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Fecha y Hora Real de Llegada:</label>
+              <input type="datetime-local" id="fechaLlegadaReal" class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Horas de Parada / Descanso:</label>
+              <input type="number" id="horasParada" min="0" value="0" class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Estado del Viaje:</label>
+              <select id="estadoViaje" class="w-full mt-1 p-1.5 border rounded font-bold bg-white">
+                <option value="EN_CURSO" class="text-amber-600">EN CURSO (Pendiente de Regreso)</option>
+                <option value="CERRADO" class="text-emerald-600">CERRADO (Viaje Finalizado)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="font-bold text-slate-700">Observaciones / Novedades del Retorno:</label>
+            <textarea id="observacionesRetorno" rows="2" class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Registre novedades a la llegada..."></textarea>
+          </div>
+        </div>
+
+        <!-- BOTONES -->
+        <div class="flex justify-end gap-2 pt-2 border-t">
+          <button type="button" onclick="closeTripModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 font-bold rounded">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow"><i class="fa-solid fa-floppy-disk mr-1"></i> Guardar Registro En Vivo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- VISTA PARA IMPRESIÓN OFICIAL -->
+  <div id="printableArea" class="hidden"></div>
+
+  <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // =========================================================================
+    // CONFIGURACIÓN DE FIREBASE (PEGA TUS LLAVES AQUÍ O USA ESTAS DE PRUEBA)
+    // =========================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDummyKeyForTestingOnly12345",
+      authDomain: "pecs-viajes-app.firebaseapp.com",
+      projectId: "pecs-viajes-app",
+      storageBucket: "pecs-viajes-app.appspot.com",
+      messagingSenderId: "123456789012",
+      appId: "1:123456789012:web:abcdef123456"
+    };
+
+    // Inicialización de Firebase
+    let db = null;
+    let tripsCollection = null;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      tripsCollection = collection(db, "viajes_pecs");
+
+      // Escuchador en tiempo real
+      onSnapshot(tripsCollection, (snapshot) => {
+        window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Ordenar por fecha de salida descendente
+        window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
+
+        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+        document.getElementById('cloudStatusText').className = "text-xs text-emerald-600 font-medium";
+        document.getElementById('cloudStatusText').textContent = "Conectado en tiempo real a la nube";
+
+        window.checkAlerts();
+        window.renderTable();
+      }, (error) => {
+        console.error("Error en conexión Firebase:", error);
+        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
+        document.getElementById('cloudStatusText').className = "text-xs text-red-600 font-medium";
+        document.getElementById('cloudStatusText').textContent = "Error de conexión con la base de datos.";
+      });
+
+    } catch(e) {
+      console.error("Falta configurar credenciales de Firebase", e);
+    }
+
+    // Exponer función de guardado a Firebase en el ámbito global
+    window.saveTripToFirebase = async function(tripData) {
+      if(!db) {
+        alert("Atención: Firebase no está configurado.");
+        return;
+      }
+      try {
+        const docRef = doc(db, "viajes_pecs", tripData.id);
+        await setDoc(docRef, tripData, { merge: true });
+      } catch (err) {
+        alert("Error al guardar en la nube: " + err.message);
+      }
+    };
+  </script>
+
+  <!-- LÓGICA DE LA APLICACIÓN -->
+  <script>
+    let currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+    window.trips = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateUserUI();
+    });
+
+    function openAuthModal() {
+      if(currentUser) {
+        document.getElementById('authDni').value = currentUser.dni || '';
+        document.getElementById('authName').value = currentUser.name || '';
+        document.getElementById('authRole').value = currentUser.role || '';
+        document.getElementById('authPermission').value = currentUser.permission || 'USER';
+      }
+      document.getElementById('authModal').classList.remove('hidden');
+    }
+
+    function saveUserSession() {
+      const dni = document.getElementById('authDni').value.trim();
+      const name = document.getElementById('authName').value.trim();
+      const role = document.getElementById('authRole').value.trim();
+      const permission = document.getElementById('authPermission').value;
+
+      if(!dni || !name || !role) {
+        alert('Por favor complete todos los campos de identificación.');
+        return;
+      }
+      currentUser = { dni, name, role, permission };
+      localStorage.setItem('pecs_user', JSON.stringify(currentUser));
+      updateUserUI();
+      document.getElementById('authModal').classList.add('hidden');
+      renderTable();
+    }
+
+    function logout() {
+      if(confirm('¿Desea cerrar sesión?')) {
+        currentUser = null;
+        localStorage.removeItem('pecs_user');
+        updateUserUI();
+        renderTable();
+      }
+    }
+
+    function updateUserUI() {
+      const badge = document.getElementById('userBadge');
+      const btnLogin = document.getElementById('btnLogin');
+      if(currentUser) {
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+        btnLogin.classList.add('hidden');
+        document.getElementById('lblUserName').textContent = currentUser.name;
+        document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.permission === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
+      } else {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+        btnLogin.classList.remove('hidden');
+      }
+    }
+
+    function checkAlerts() {
+      const banner = document.getElementById('alertsBanner');
+      banner.innerHTML = '';
+      const now = new Date();
+      let count = 0;
+
+      window.trips.forEach(t => {
+        if(t.estado === 'EN_CURSO') {
+          const departure = new Date(t.fechaSalida);
+          const limit = new Date(departure.getTime() + (parseInt(t.duracionEstimada || 24) * 3600000));
+          const diffHours = (limit - now) / 3600000;
+
+          if(diffHours < 0) {
+            count++;
+            banner.innerHTML += `
+              <div class="bg-red-50 border-l-4 border-red-600 p-3 rounded shadow-sm mb-2 flex justify-between items-center text-xs">
+                <div>
+                  <strong class="text-red-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ¡ALERTA DE VIAJE VENCIDO!</strong>
+                  <p class="text-red-700">El viaje PECS N° <strong>${t.pecsNum}</strong> asignado a <strong>${t.nombreConductor}</strong> excedió su tiempo estimado de retorno (${limit.toLocaleString()}). ¡Debe cerrarse!</p>
+                </div>
+                <button onclick="openEditModal('${t.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-bold">Registrar Retorno</button>
+              </div>`;
+          } else if(diffHours <= 6) {
+            count++;
+            banner.innerHTML += `
+              <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded shadow-sm mb-2 flex justify-between items-center text-xs">
+                <div>
+                  <strong class="text-amber-800"><i class="fa-solid fa-bell mr-1"></i> Recordatorio de Retorno Próximo</strong>
+                  <p class="text-amber-700">El viaje PECS N° <strong>${t.pecsNum}</strong> (${t.nombreConductor}) está próximo a cumplir su tiempo límite (${Math.round(diffHours)} horas restantes).</p>
+                </div>
+                <button onclick="openEditModal('${t.id}')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-bold">Ver / Cerrar</button>
+              </div>`;
+          }
+        }
+      });
+      if(count > 0) banner.classList.remove('hidden');
+      else banner.classList.add('hidden');
+    }
+
+    function calculateRisk() {
+      let total = 0;
+      for(let i=1; i<=8; i++) total += parseInt(document.getElementById(`r${i}`).value || 0);
+      document.getElementById('scoreBadge').textContent = `${total} Pts`;
+      const warning = document.getElementById('gerenciaWarning');
+      if(total > 30) warning.classList.remove('hidden');
+      else warning.classList.add('hidden');
+      return total;
+    }
+
+    function openNewTripModal() {
+      if(!currentUser) {
+        alert('Debe identificarse primero con su documento de identidad.');
+        openAuthModal();
+        return;
+      }
+      document.getElementById('pecsForm').reset();
+      document.getElementById('formId').value = '';
+      document.getElementById('nombreConductor').value = currentUser.name;
+      document.getElementById('estadoViaje').value = 'EN_CURSO';
+      calculateRisk();
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+      const t = window.trips.find(x => x.id === id);
+      if(!t) return;
+
+      if(currentUser && currentUser.permission !== 'ADMIN' && t.createdDni !== currentUser.dni && t.nombreConductor !== currentUser.name) {
+        alert('SEGURIDAD: No está autorizado para modificar un viaje registrado por otro usuario.');
+        return;
+      }
+
+      document.getElementById('formId').value = t.id;
+      document.getElementById('pecsNum').value = t.pecsNum;
+      document.getElementById('motivo').value = t.motivo;
+      document.getElementById('proyecto').value = t.proyecto;
+      document.getElementById('lugarSalida').value = t.lugarSalida;
+      document.getElementById('lugarLlegada').value = t.lugarLlegada;
+      document.getElementById('fechaSalida').value = t.fechaSalida;
+      document.getElementById('duracionEstimada').value = t.duracionEstimada || '24';
+      document.getElementById('tipoVehiculo').value = t.tipoVehiculo;
+      document.getElementById('placa').value = t.placa;
+      document.getElementById('preInspeccion').value = t.preInspeccion;
+      document.getElementById('numPasajeros').value = t.numPasajeros;
+      document.getElementById('satelital').value = t.satelital;
+      document.getElementById('nombreConductor').value = t.nombreConductor;
+      document.getElementById('supervisor').value = t.supervisor;
+
+      if(t.risks) {
+        for(let i=1; i<=8; i++) document.getElementById(`r${i}`).value = t.risks[`r${i}`] || 0;
+      }
+
+      document.getElementById('fechaLlegadaReal').value = t.fechaLlegadaReal || '';
+      document.getElementById('horasParada').value = t.horasParada || 0;
+      document.getElementById('observacionesRetorno').value = t.observacionesRetorno || '';
+      document.getElementById('estadoViaje').value = t.estado || 'EN_CURSO';
+
+      calculateRisk();
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function closeTripModal() {
+      document.getElementById('tripModal').classList.add('hidden');
+    }
+
+    async function saveTrip(e) {
+      e.preventDefault();
+      if(!currentUser) {
+        alert('Debe identificarse antes de guardar.');
+        openAuthModal();
+        return;
+      }
+
+      const id = document.getElementById('formId').value || 'TRIP-' + Date.now();
+      const isNew = !document.getElementById('formId').value;
+
+      const risks = {};
+      for(let i=1; i<=8; i++) risks[`r${i}`] = document.getElementById(`r${i}`).value;
+
+      const tripData = {
+        id,
+        pecsNum: document.getElementById('pecsNum').value,
+        motivo: document.getElementById('motivo').value,
+        proyecto: document.getElementById('proyecto').value,
+        lugarSalida: document.getElementById('lugarSalida').value,
+        lugarLlegada: document.getElementById('lugarLlegada').value,
+        fechaSalida: document.getElementById('fechaSalida').value,
+        duracionEstimada: document.getElementById('duracionEstimada').value,
+        tipoVehiculo: document.getElementById('tipoVehiculo').value,
+        placa: document.getElementById('placa').value,
+        preInspeccion: document.getElementById('preInspeccion').value,
+        numPasajeros: document.getElementById('numPasajeros').value,
+        satelital: document.getElementById('satelital').value,
+        nombreConductor: document.getElementById('nombreConductor').value,
+        supervisor: document.getElementById('supervisor').value,
+        risks,
+        totalScore: calculateRisk(),
+        estado: document.getElementById('estadoViaje').value,
+        fechaLlegadaReal: document.getElementById('fechaLlegadaReal').value,
+        horasParada: document.getElementById('horasParada').value,
+        observacionesRetorno: document.getElementById('observacionesRetorno').value,
+        
+        createdDni: isNew ? currentUser.dni : (window.trips.find(x=>x.id===id)?.createdDni || currentUser.dni),
+        createdByName: isNew ? currentUser.name : (window.trips.find(x=>x.id===id)?.createdByName || currentUser.name),
+        updatedByName: currentUser.name,
+        updatedAt: new Date().toISOString()
+      };
+
+      await window.saveTripToFirebase(tripData);
+      closeTripModal();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tripsTableBody');
+      tbody.innerHTML = '';
+      const filter = document.getElementById('filterStatus').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const now = new Date();
+
+      let filtered = window.trips.filter(t => {
+        const matchSearch = (t.pecsNum||'').toLowerCase().includes(search) || (t.nombreConductor||'').toLowerCase().includes(search) || (t.placa||'').toLowerCase().includes(search);
+        if(!matchSearch) return false;
+        if(filter !== 'ALL' && t.estado !== filter) return false;
+        return true;
+      });
+
+      if(filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">No hay registros de viajes en la base de datos.</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(t => {
+        const departure = new Date(t.fechaSalida);
+        const limit = new Date(departure.getTime() + (parseInt(t.duracionEstimada || 24) * 3600000));
+        const isExpired = t.estado === 'EN_CURSO' && limit < now;
+
+        let badge = `<span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded text-[10px]">EN CURSO</span>`;
+        if(t.estado === 'CERRADO') badge = `<span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">CERRADO</span>`;
+        else if(isExpired) badge = `<span class="bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded text-[10px] animate-pulse">VENCIDO</span>`;
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50 border-b">
+            <td class="p-3 font-bold text-blue-700">${t.pecsNum}</td>
+            <td class="p-3">
+              <div class="font-bold text-slate-800">${t.motivo}</div>
+              <div class="text-[10px] text-slate-500">${t.proyecto}</div>
+            </td>
+            <td class="p-3">
+              <div class="font-bold">${t.nombreConductor}</div>
+              <div class="text-[10px] text-slate-500">${t.tipoVehiculo} (${t.placa})</div>
+            </td>
+            <td class="p-3 text-[11px] text-slate-600">
+              <div>Salida: ${new Date(t.fechaSalida).toLocaleString()}</div>
+              <div>Límite: ${limit.toLocaleString()}</div>
+            </td>
+            <td class="p-3">${badge}</td>
+            <td class="p-3 text-[10px] text-slate-500">
+              <div class="font-bold">${t.createdByName}</div>
+              <div>Riesgo: ${t.totalScore} Pts</div>
+            </td>
+            <td class="p-3 text-center space-x-1">
+              <button onclick="openEditModal('${t.id}')" title="Editar / Cerrar Retorno" class="bg-blue-100 hover:bg-blue-200 text-blue-700 p-1.5 rounded"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button onclick="printTrip('${t.id}')" title="Imprimir Formato" class="bg-slate-200 hover:bg-slate-300 text-slate-700 p-1.5 rounded"><i class="fa-solid fa-print"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function exportToExcelFormatted() {
+      if(!window.trips || window.trips.length === 0) {
+        alert('No hay información para exportar.');
+        return;
+      }
+
+      const formattedRows = window.trips.map((t, index) => ({
+        "N°": index + 1,
+        "N° PECS": t.pecsNum,
+        "ESTADO VIAJE": t.estado === 'EN_CURSO' ? 'EN CURSO' : 'FINALIZADO',
+        "FECHA SALIDA": t.fechaSalida ? new Date(t.fechaSalidaconv).toLocaleString() : 'N/A',
+        "LÍMITE ESTIMADO": t.fechaSalida ? new Date(new Date(t.fechaSalida).getTime() + (parseInt(t.duracionEstimada || 24) * 3600000)).toLocaleString() : 'N/A',
+        "FECHA RETORNO REAL": t.fechaLlegadaReal ? new Date(t.fechaLlegadaReal).toLocaleString() : 'PENDIENTE',
+        "CONDUCTOR": t.nombreConductor,
+        "SUPERVISOR": t.supervisor,
+        "VEHÍCULO": t.tipoVehiculo,
+        "PLACA": t.placa,
+        "MOTIVO": t.motivo,
+        "PROYECTO": t.proyecto,
+        "ORIGEN": t.lugarSalida,
+        "DESTINO": t.lugarLlegada,
+        "PUNTAJE RIESGO": t.totalScore,
+        "EXCEPCIÓN GERENCIAL": t.totalScore > 30 ? 'REQUIERE APROBACIÓN' : 'NORMAL',
+        "USUARIO REGISTRO": t.createdByName,
+        "CÉDULA REGISTRO": t.createdDni,
+        "NOVEDADES RETORNO": t.observacionesRetorno || 'SIN NOVEDADES'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+
+      const colWidths = [
+        { wch: 4 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 },
+        { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
+        { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+        { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 30 }
+      ];
+      worksheet['!cols'] = colWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Registro PECS RE-LOG-01");
+      XLSX.writeFile(workbook, `Reporte_EnVivo_PECS_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function printTrip(id) {
+      const t = window.trips.find(x => x.id === id);
+      if(!t) return;
+      const area = document.getElementById('printableArea');
+      area.innerHTML = `
+        <div class="p-8 border-2 border-black font-sans text-xs max-w-4xl mx-auto my-4 bg-white">
+          <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
+            <div>
+              <h1 class="text-base font-bold">GERENCIAMIENTO DE VIAJES - PECS RE-LOG-01</h1>
+              <p>DOCUMENTO DE CONTROL LOGÍSTICO Y MATRIZ DE RIESGO</p>
+            </div>
+            <div class="text-right">
+              <span class="text-base font-bold text-red-600">N° PECS: ${t.pecsNum}</span>
+              <p>Fecha: ${new Date(t.fechaSalida).toLocaleDateString()}</p>
+            </div>
+          </div>
+          <table class="w-full border-collapse border border-black mb-4">
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Motivo:</td><td class="border border-black p-1">${t.motivo}</td><td class="border border-black p-1 font-bold bg-slate-100">Proyecto:</td><td class="border border-black p-1">${t.proyecto}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Origen/Destino:</td><td class="border border-black p-1">${t.lugarSalida} ➔ ${t.lugarLlegada}</td><td class="border border-black p-1 font-bold bg-slate-100">Conductor:</td><td class="border border-black p-1">${t.nombreConductor}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Vehículo / Placa:</td><td class="border border-black p-1">${t.tipoVehiculo} (${t.placa})</td><td class="border border-black p-1 font-bold bg-slate-100">Supervisor:</td><td class="border border-black p-1">${t.supervisor}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Salida:</td><td class="border border-black p-1">${new Date(t.fechaSalida).toLocaleString()}</td><td class="border border-black p-1 font-bold bg-slate-100">Llegada Real:</td><td class="border border-black p-1">${t.fechaLlegadaReal ? new Date(t.fechaLlegadaReal).toLocaleString() : 'PENDIENTE'}</td></tr>
+          </table>
+          <div class="border border-black p-2 mb-4">
+            <strong>Puntaje de Riesgo Total:</strong> ${t.totalScore} Pts (${t.totalScore > 30 ? 'Requiere Autorización Gerencial' : 'Normal'})
+          </div>
+          <div class="border border-black p-2 mb-6">
+            <strong>Observaciones de Retorno:</strong> ${t.observacionesRetorno || 'Sin novedades'}
+          </div>
+          <div class="grid grid-cols-2 gap-8 text-center pt-8 border-t border-black">
+            <div><div class="border-t border-black pt-1 font-bold">Firma del Conductor</div><div>${t.nombreConductor}</div></div>
+            <div><div class="border-t border-black pt-1 font-bold">Responsable Logístico / SSA</div><div>${t.supervisor}</div></div>
+          </div>
+        </div>
+      `;
+      area.classList.remove('hidden');
+      window.print();
+      area.classList.add('hidden');
+    }
+
+    window.openAuthModal = openAuthModal;
+    window.saveUserSession = saveUserSession;
+    window.logout = logout;
+    window.checkAlerts = checkAlerts;
+    window.calculateRisk = calculateRisk;
+    window.openNewTripModal = openNewTripModal;
+    window.openEditModal = openEditModal;
+    window.closeTripModal = closeTripModal;
+    window.saveTrip = saveTrip;
+    window.renderTable = renderTable;
+    window.exportToExcelFormatted = exportToExcelFormatted;
+    window.printTrip = printTrip;
+  </script>
+</body>
+</html>
