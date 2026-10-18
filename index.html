@@ -55,10 +55,19 @@
   <!-- PANEL DE GESTIÓN Y ACCIONES RÁPIDAS -->
   <div class="max-w-6xl mx-auto bg-white p-4 rounded-xl shadow-sm border border-slate-300 mb-6 flex flex-wrap justify-between items-center gap-4 no-print">
     <div class="flex gap-2">
-      <button onclick="openNewTripModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+      <button onclick="openNewTripModal()" configurarCamposFormulario(false, false);
+ class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
         <i class="fa-solid fa-plus"></i> Nueva Solicitud de Viaje (Fase 1)
       </button>
-      <button onclick="exportToExcelFormatted()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+      <button onclick="exportToExcelFormatted()" const esAdmin = currentUser && currentUser.role === 'ADMIN';
+if (esAdmin) {
+  configurarCamposFormulario(false, false); // El administrador puede editar todo siempre
+} else if (t.estado === 'CERRADO') {
+  configurarCamposFormulario(true, false); // Si está cerrado, el chofer no edita nada
+} else {
+  configurarCamposFormulario(false, true); // Si está en curso, el chofer solo edita la Fase 2 (Retorno)
+}
+ class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
         <i class="fa-solid fa-file-excel"></i> Exportar a Excel Formateado (.xlsx)
       </button>
     </div>
@@ -94,31 +103,21 @@
     </div>
   </div>
 
-  <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
+    <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
+    <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
   <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden no-print">
     <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
       <h3 class="font-bold text-sm text-slate-900 border-b pb-2"><i class="fa-solid fa-user-lock text-blue-600 mr-2"></i> Identificación de Usuario</h3>
-      <p class="text-xs text-slate-500">Ingrese su documento de identidad y nombre para validar autorizaciones de viaje.</p>
+      <p class="text-xs text-slate-500">Ingrese su correo electrónico y contraseña asignados para acceder al sistema.</p>
       <div>
-        <label class="block font-bold text-[11px] text-slate-700 mb-1">Cédula / Documento *</label>
-        <input type="text" id="authDni" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. 1314012345">
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Correo Electrónico *</label>
+        <input type="email" id="authEmail" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. conductor@pecs.com">
       </div>
       <div>
-        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nombres y Apellidos *</label>
-        <input type="text" id="authName" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. Carlos Mendoza">
+        <label class="block font-bold text-[11px] text-slate-700 mb-1">Contraseña *</label>
+        <input type="password" id="authPassword" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="••••••••">
       </div>
-      <div>
-        <label class="block font-bold text-[11px] text-slate-700 mb-1">Rol / Cargo *</label>
-        <input type="text" id="authRole" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="Ej. Chofer / Supervisor">
-      </div>
-      <div>
-        <label class="block font-bold text-[11px] text-slate-700 mb-1">Nivel de Permiso (asignado por el sistema)</label>
-        <select id="authPermission" class="w-full text-xs p-2 border border-slate-300 rounded outline-none bg-white">
-          <option value="USER">Conductor / Operativo (Edita sus viajes)</option>
-          
-        </select>
-      </div>
-      <button onclick="saveUserSession()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded text-xs shadow">Guardar Identificación</button>
+      <button onclick="loginConFirebase()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded text-xs shadow">Iniciar Sesión</button>
     </div>
   </div>
 
@@ -288,74 +287,116 @@
   <div id="printableArea" class="hidden"></div>
 
   <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) -->
+    <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    // =========================================================================
-    // CONFIGURACIÓN DE FIREBASE (PEGA TUS LLAVES AQUÍ O USA ESTAS DE PRUEBA)
-    // =========================================================================
+    // Configuración de tu base de datos
     const firebaseConfig = {
-  apiKey: "AIzaSyBzKk-DRT5Q8NPUADp4tz3cl4SlMPhxOoU",
-  authDomain: "pecs-viajes-app-ae198.firebaseapp.com",
-  databaseURL: "https://pecs-viajes-app-ae198-default-rtdb.firebaseio.com",
-  projectId: "pecs-viajes-app-ae198",
-  storageBucket: "pecs-viajes-app-ae198.firebasestorage.app",
-  messagingSenderId: "182123688537",
-  appId: "1:182123688537:web:9e0fa31f598c0000fef748"
-};
-    // Inicialización de Firebase
-    let db = null;
-    let tripsCollection = null;
+      apiKey: "REEMPLAZAR_CON_API_KEY_REAL",
+      authDomain: "pecs-viajes-app-ae198.firebaseapp.com",
+      projectId: "pecs-viajes-app-ae198",
+      storageBucket: "pecs-viajes-app-ae198.appspot.com",
+      messagingSenderId: "REEMPLAZAR_CON_MESSAGING_SENDER_ID",
+      appId: "REEMPLAZAR_CON_APP_ID_REAL"
+    };
 
-    try {
-      if (firebaseConfig.apiKey.startsWith('REEMPLAZAR_')) throw new Error('Configure Firebase antes de utilizar la aplicación.');
-      const app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
-      tripsCollection = collection(db, "viajes_pecs");
+    // Inicialización de servicios
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const tripsCollection = collection(db, "viajes_pecs");
 
-      // Escuchador en tiempo real
-      onSnapshot(tripsCollection, (snapshot) => {
-        window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Ordenar por fecha de salida descendente
-        window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
+    // DETECTAR SESIÓN Y EXTRAER EL ROL DEL USUARIO EN FIRESTORE
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Buscamos el documento del usuario en la colección "usuarios" usando su UID
+          const userDocRef = doc(db, "usuarios", user.uid);
+          const userSnap = await getDoc(userDocRef);
+          
+          let userRole = "CHOFER"; // Rol por defecto
+          let userName = user.email.split('@')[0]; // Nombre por defecto si no está en base de datos
 
-        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
-        document.getElementById('cloudStatusText').className = "text-xs text-emerald-600 font-medium";
-        document.getElementById('cloudStatusText').textContent = "Conectado en tiempo real a la nube";
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            userRole = data.rol || "CHOFER";
+            userName = data.nombre || userName;
+          }
 
-        window.checkAlerts();
-        window.renderTable();
-      }, (error) => {
-        console.error("Error en conexión Firebase:", error);
-        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
-        document.getElementById('cloudStatusText').className = "text-xs text-red-600 font-medium";
-        document.getElementById('cloudStatusText').textContent = "Error de conexión con la base de datos.";
-      });
+          // Asignamos el objeto de sesión con el rol real obtenido
+          window.currentUser = { 
+            dni: user.uid, 
+            name: userName, 
+            role: userRole, 
+            permission: userRole 
+          };
+          localStorage.setItem('pecs_user', JSON.stringify(window.currentUser));
 
-    } catch(e) {
-      console.error("Falta configurar credenciales de Firebase", e);
-      document.getElementById('cloudStatusText').textContent = 'Firebase sin configurar. Contacte al administrador.';
-      document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-red-500';
-    }
-
-    // Exponer función de guardado a Firebase en el ámbito global
-    window.saveTripToFirebase = async function(tripData) {
-      if(!db) {
-        alert("Atención: Firebase no está configurado.");
-        return false;
+        } catch (error) {
+          console.error("Error al obtener rol del usuario:", error);
+        }
+      } else {
+        // Limpiamos sesión local si se desloguea
+        window.currentUser = null;
+        localStorage.removeItem('pecs_user');
       }
+
+      window.updateUserUI();
+      window.renderTable();
+    });
+
+    // Escuchador en tiempo real para los viajes
+    onSnapshot(tripsCollection, (snapshot) => {
+      window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
+      
+      document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+      document.getElementById('cloudStatusText').className = "text-xs text-emerald-600 font-medium";
+      document.getElementById('cloudStatusText').textContent = "Conectado en tiempo real a la nube";
+
+      window.checkAlerts();
+      window.renderTable();
+    }, (error) => {
+      console.error(error);
+      document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
+      document.getElementById('cloudStatusText').textContent = "Error de permisos o conexión.";
+    });
+
+    // Funciones globales expuestas al navegador
+    window.loginConFirebase = async function() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        document.getElementById('authModal').classList.add('hidden');
+      } catch (err) {
+        alert("Error de acceso: " + err.message);
+      }
+    };
+
+    window.logout = async function() {
+      if(confirm('¿Desea cerrar sesión?')) {
+        await signOut(auth);
+      }
+    };
+
+    window.saveTripToFirebase = async function(tripData) {
       try {
         const docRef = doc(db, "viajes_pecs", tripData.id);
         await setDoc(docRef, tripData, { merge: true });
         return true;
       } catch (err) {
-        alert("Error al guardar en la nube: " + err.message);
+        alert("Error en la base de datos: " + err.message);
         return false;
       }
     };
   </script>
+
+
+
 
   <!-- LÓGICA DE LA APLICACIÓN -->
   <script>
@@ -730,6 +771,18 @@
     window.renderTable = renderTable;
     window.exportToExcelFormatted = exportToExcelFormatted;
     window.printTrip = printTrip;
+function configurarCamposFormulario(bloquearTodo, bloquearFase1Solo) {
+  const fase1Ids = ["pecsNum", "motivo", "proyecto", "lugarSalida", "lugarLlegada", "fechaSalida", "duracionEstimada", "tipoVehiculo", "placa", "preInspeccion", "numPasajeros", "satelital", "nombreConductor", "supervisor", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8"];
+  const fase2Ids = ["fechaLlegadaReal", "horasParada", "observacionesRetorno", "estadoViaje"];
+  
+  fase1Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo || bloquearFase1Solo);
+  fase2Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo);
+  
+  const btnGuardar = document.querySelector("#pecsForm button[type='submit']");
+  if (btnGuardar) btnGuardar.style.display = bloquearTodo ? "none" : "block";
+}
+
+
   </script>
 </body>
 </html>
