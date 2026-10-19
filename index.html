@@ -304,74 +304,57 @@
 
     let tripsUnsubscribe = null; // Controla el oyente de base de datos activo
 
-    // DETECTAR SESIÓN Y EXTRAER EL ROL DEL USUARIO EN FIRESTORE
+    // Firebase Auth es la única fuente de verdad para la sesión.
+    let authSequence = 0;
     onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDocRef = doc(db, "usuarios", user.uid);
-          const userSnap = await getDoc(userDocRef);
-          
-          let userRole = "CHOFER"; 
-          let userName = user.email.split('@')[0]; 
-
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            userRole = data.rol || "CHOFER";
-            userName = data.nombre || userName;
-          }
-
-          window.currentUser = { dni: user.uid, name: userName, role: userRole, permission: userRole };
-          localStorage.setItem('pecs_user', JSON.stringify(window.currentUser));
-
-          // INICIAR EL OYENTE SOLO DESPUÉS DE VALIDAR LA SESIÓN
-          if (!tripsUnsubscribe) {
-            tripsUnsubscribe = onSnapshot(tripsCollection, (snapshot) => {
-              window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
-              
-              const statusText = document.getElementById('cloudStatusText');
-              const cloudDot = document.getElementById('cloudStatus');
-              if (statusText && cloudDot) {
-                cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
-                statusText.className = "text-xs text-emerald-600 font-medium";
-                statusText.textContent = "Conectado en tiempo real a la nube";
-              }
-
-              window.checkAlerts();
-              window.renderTable();
-            }, (error) => {
-              console.error("Error en Firestore:", error);
-              const statusText = document.getElementById('cloudStatusText');
-              const cloudDot = document.getElementById('cloudStatus');
-              if (statusText && cloudDot) {
-                cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
-                statusText.textContent = "Error de permisos en la base de datos.";
-              }
-            });
-          }
-
-        } catch (error) { 
-          console.error("Error de sesión:", error); 
-        }
-      } else {
-        // Si el usuario cierra sesión, apagamos el oyente de Firestore
-        if (tripsUnsubscribe) {
-          tripsUnsubscribe();
-          tripsUnsubscribe = null;
-        }
-        window.currentUser = null;
-        localStorage.removeItem('pecs_user');
-        
-        const statusText = document.getElementById('cloudStatusText');
-        const cloudDot = document.getElementById('cloudStatus');
-        if (statusText && cloudDot) {
-          cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
-          statusText.className = "text-xs text-amber-600 font-medium";
-          statusText.textContent = "Identifíquese para conectar con la base de datos.";
-        }
+      const sequence = ++authSequence;
+      if (tripsUnsubscribe) { tripsUnsubscribe(); tripsUnsubscribe = null; }
+      window.trips = [];
+      window.currentUser = null;
+      window.authReady = false;
+      window.updateUserUI();
+      if (!user) {
+        window.authReady = true;
+        window.updateUserUI();
+        window.renderTable();
+        document.getElementById('cloudStatusText').textContent = 'Identifíquese para conectar con la base de datos.';
+        document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-amber-400';
+        return;
       }
+      let role = 'CHOFER';
+      let name = user.displayName || user.email?.split('@')[0] || 'Usuario';
+      try {
+        const profile = await getDoc(doc(db, 'usuarios', user.uid));
+        if (profile.exists()) {
+          role = String(profile.data().rol || role).toUpperCase();
+          name = profile.data().nombre || name;
+        }
+      } catch (error) {
+        console.warn('No se pudo cargar el perfil de Firestore; se mantiene la sesión:', error);
+      }
+      if (sequence !== authSequence || auth.currentUser?.uid !== user.uid) return;
+      window.currentUser = { dni: user.uid, email: user.email, name, role, permission: role };
+      window.authReady = true;
       window.updateUserUI();
       window.renderTable();
+      tripsUnsubscribe = onSnapshot(tripsCollection, snapshot => {
+        if (sequence !== authSequence) return;
+        window.trips = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
+        window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
+        document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-500';
+        document.getElementById('cloudStatusText').textContent = 'Conectado en tiempo real a la nube';
+        window.checkAlerts();
+        window.renderTable();
+      }, error => {
+        console.error('Error de Firestore:', error);
+        document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-red-500';
+        document.getElementById('cloudStatusText').textContent = 'Error al leer viajes: ' + error.code;
+      });
+    }, error => {
+      console.error('Error al verificar autenticación:', error);
+      window.authReady = true;
+      window.currentUser = null;
+      window.updateUserUI();
     });
 
     // Funciones globales expuestas al navegador
@@ -393,7 +376,7 @@
 
     window.logout = async function() {
       if(confirm('¿Desea cerrar sesión?')) {
-        await signOut(auth);
+        try { await signOut(auth); } catch (err) { alert('No se pudo cerrar sesión: ' + err.message); }
       }
     };
 
@@ -411,7 +394,9 @@
 
   <!-- LÓGICA DE LA APLICACIÓN -->
   <script>
-    let currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+    window.currentUser = null;
+    window.authReady = false;
+    let currentUser = null;
     window.trips = [];
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -420,7 +405,7 @@
     });
 
     function openAuthModal() {
-      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      currentUser = window.currentUser;
       if(currentUser && currentUser.email) {
         document.getElementById('authEmail').value = currentUser.email;
       }
@@ -437,7 +422,7 @@
       const statusText = document.getElementById('cloudStatusText');
       const cloudDot = document.getElementById('cloudStatus');
       
-      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      currentUser = window.currentUser;
       
       if(currentUser) {
         badge.classList.remove('hidden');
@@ -538,10 +523,10 @@
     }
 
     function openNewTripModal() {
-      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      currentUser = window.currentUser;
       if(!currentUser) {
-        alert('Debe iniciar sesión primero.');
-        openAuthModal();
+        alert(window.authReady ? 'Debe iniciar sesión primero.' : 'Verificando sesión, espere un momento.');
+        if(window.authReady) openAuthModal();
         return;
       }
       const form = document.getElementById('pecsForm');
@@ -563,10 +548,10 @@
       const t = window.trips.find(x => x.id === id);
       if(!t) return;
 
-      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      currentUser = window.currentUser;
       if(!currentUser) {
-        alert('Debe iniciar sesión primero.');
-        openAuthModal();
+        alert(window.authReady ? 'Debe iniciar sesión primero.' : 'Verificando sesión, espere un momento.');
+        if(window.authReady) openAuthModal();
         return;
       }
 
@@ -623,10 +608,10 @@
 
     async function saveTrip(e) {
       e.preventDefault();
-      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      currentUser = window.currentUser;
       if(!currentUser) {
-        alert('Debe iniciar sesión antes de guardar.');
-        openAuthModal();
+        alert(window.authReady ? 'Debe iniciar sesión antes de guardar.' : 'Verificando sesión, espere un momento.');
+        if(window.authReady) openAuthModal();
         return;
       }
 
