@@ -326,9 +326,13 @@
               window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
               window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
               
-              document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
-              document.getElementById('cloudStatusText').className = "text-xs text-emerald-600 font-medium";
-              document.getElementById('cloudStatusText').textContent = "Conectado en tiempo real a la nube";
+              const statusText = document.getElementById('cloudStatusText');
+              const cloudDot = document.getElementById('cloudStatus');
+              if (statusText && cloudDot) {
+                cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+                statusText.className = "text-xs text-emerald-600 font-medium";
+                statusText.textContent = "Conectado en tiempo real a la nube";
+              }
 
               window.checkAlerts();
               window.renderTable();
@@ -407,6 +411,9 @@
     function updateUserUI() {
       const badge = document.getElementById('userBadge');
       const btnLogin = document.getElementById('btnLogin');
+      const statusText = document.getElementById('cloudStatusText');
+      const cloudDot = document.getElementById('cloudStatus');
+      
       currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
       
       if(currentUser) {
@@ -415,10 +422,22 @@
         btnLogin.classList.add('hidden');
         document.getElementById('lblUserName').textContent = currentUser.name;
         document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.role === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
+        
+        if (statusText && cloudDot) {
+          cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+          statusText.className = "text-xs text-emerald-600 font-medium";
+          statusText.textContent = "Conectado en tiempo real a la nube";
+        }
       } else {
         badge.classList.add('hidden');
         badge.classList.remove('flex');
         btnLogin.classList.remove('hidden');
+        
+        if (statusText && cloudDot) {
+          cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+          statusText.className = "text-xs text-amber-600 font-medium";
+          statusText.textContent = "Identifíquese para conectar con la base de datos.";
+        }
       }
     }
 
