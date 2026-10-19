@@ -526,4 +526,250 @@
       document.getElementById('pecsNum').value = t.pecsNum;
       document.getElementById('motivo').value = t.motivo;
       document.getElementById('proyecto').value = t.proyecto;
-      document.getElementById('
+      document.getElementById('lugarSalida').value = t.lugarSalida;
+      document.getElementById('lugarLlegada').value = t.lugarLlegada;
+      document.getElementById('fechaSalida').value = t.fechaSalida;
+      document.getElementById('duracionEstimada').value = t.duracionEstimada || '24';
+      document.getElementById('tipoVehiculo').value = t.tipoVehiculo;
+      document.getElementById('placa').value = t.placa;
+      document.getElementById('preInspeccion').value = t.preInspeccion;
+      document.getElementById('numPasajeros').value = t.numPasajeros;
+      document.getElementById('satelital').value = t.satelital;
+      document.getElementById('nombreConductor').value = t.nombreConductor;
+      document.getElementById('supervisor').value = t.supervisor;
+
+      if(t.risks) {
+        for(let i=1; i<=8; i++) document.getElementById(`r${i}`).value = t.risks[`r${i}`] || 0;
+      }
+
+      document.getElementById('fechaLlegadaReal').value = t.fechaLlegadaReal || '';
+      document.getElementById('horasParada').value = t.horasParada || 0;
+      document.getElementById('observacionesRetorno').value = t.observacionesRetorno || '';
+      document.getElementById('estadoViaje').value = t.estado || 'EN_CURSO';
+
+      // Aplicar restricciones de campos según rol y estado
+      if (esAdmin) {
+        configurarCamposFormulario(false, false); // Admin edita todo
+      } else if (t.estado === 'CERRADO') {
+        configurarCamposFormulario(true, false); // Cerrado: chofer no edita nada
+      } else {
+        configurarCamposFormulario(false, true); // En curso: chofer solo edita Fase 2 (retorno)
+      }
+
+      calculateRisk();
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function closeTripModal() {
+      document.getElementById('tripModal').classList.add('hidden');
+    }
+
+    async function saveTrip(e) {
+      e.preventDefault();
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      if(!currentUser) {
+        alert('Debe iniciar sesión antes de guardar.');
+        openAuthModal();
+        return;
+      }
+
+      const status = document.getElementById('estadoViaje').value;
+      const departureValue = document.getElementById('fechaSalida').value;
+      const arrivalValue = document.getElementById('fechaLlegadaReal').value;
+      
+      if (status === 'CERRADO' && (!arrivalValue || !Number.isFinite(new Date(arrivalValue).getTime()) || new Date(arrivalValue) < new Date(departureValue) || new Date(arrivalValue) > new Date())) {
+        alert('Para cerrar el viaje, registre una llegada válida, posterior a la salida y no futura.');
+        return;
+      }
+      
+      const id = document.getElementById('formId').value || 'TRIP-' + Date.now();
+      const isNew = !document.getElementById('formId').value;
+
+      const risks = {};
+      for(let i=1; i<=8; i++) risks[`r${i}`] = document.getElementById(`r${i}`).value;
+
+      const tripData = {
+        id,
+        pecsNum: document.getElementById('pecsNum').value,
+        motivo: document.getElementById('motivo').value,
+        proyecto: document.getElementById('proyecto').value,
+        lugarSalida: document.getElementById('lugarSalida').value,
+        lugarLlegada: document.getElementById('lugarLlegada').value,
+        fechaSalida: document.getElementById('fechaSalida').value,
+        duracionEstimada: document.getElementById('duracionEstimada').value,
+        tipoVehiculo: document.getElementById('tipoVehiculo').value,
+        placa: document.getElementById('placa').value,
+        preInspeccion: document.getElementById('preInspeccion').value,
+        numPasajeros: document.getElementById('numPasajeros').value,
+        satelital: document.getElementById('satelital').value,
+        nombreConductor: document.getElementById('nombreConductor').value,
+        supervisor: document.getElementById('supervisor').value,
+        risks,
+        totalScore: calculateRisk(),
+        estado: document.getElementById('estadoViaje').value,
+        fechaLlegadaReal: document.getElementById('fechaLlegadaReal').value,
+        horasParada: document.getElementById('horasParada').value,
+        observacionesRetorno: document.getElementById('observacionesRetorno').value,
+        
+        createdDni: isNew ? currentUser.dni : (window.trips.find(x=>x.id===id)?.createdDni || currentUser.dni),
+        createdByName: isNew ? currentUser.name : (window.trips.find(x=>x.id===id)?.createdByName || currentUser.name),
+        updatedByName: currentUser.name,
+        updatedAt: new Date().toISOString()
+      };
+
+      const saved = await window.saveTripToFirebase(tripData);
+      if (saved) closeTripModal();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tripsTableBody');
+      tbody.innerHTML = '';
+      const filter = document.getElementById('filterStatus').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const now = new Date();
+
+      let filtered = window.trips.filter(t => {
+        const matchSearch = (t.pecsNum||'').toLowerCase().includes(search) || (t.nombreConductor||'').toLowerCase().includes(search) || (t.placa||'').toLowerCase().includes(search);
+        if(!matchSearch) return false;
+        if(filter !== 'ALL' && t.estado !== filter) return false;
+        return true;
+      });
+
+      if(filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">No hay registros de viajes en la base de datos.</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(t => {
+        const departure = new Date(t.fechaSalida);
+        const limit = new Date(departure.getTime() + (parseInt(t.duracionEstimada || 24) * 3600000));
+        const isExpired = t.estado === 'EN_CURSO' && limit < now;
+
+        let badge = `<span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded text-[10px]">EN CURSO</span>`;
+        if(t.estado === 'CERRADO') badge = `<span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">CERRADO</span>`;
+        else if(isExpired) badge = `<span class="bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded text-[10px] animate-pulse">VENCIDO</span>`;
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50 border-b">
+            <td class="p-3 font-bold text-blue-700">${t.pecsNum}</td>
+            <td class="p-3">
+              <div class="font-bold text-slate-800">${t.motivo}</div>
+              <div class="text-[10px] text-slate-500">${t.proyecto}</div>
+            </td>
+            <td class="p-3">
+              <div class="font-bold">${t.nombreConductor}</div>
+              <div class="text-[10px] text-slate-500">${t.tipoVehiculo} (${t.placa})</div>
+            </td>
+            <td class="p-3 text-[11px] text-slate-600">
+              <div>Salida: ${new Date(t.fechaSalida).toLocaleString()}</div>
+              <div>Límite: ${limit.toLocaleString()}</div>
+            </td>
+            <td class="p-3">${badge}</td>
+            <td class="p-3 text-[10px] text-slate-500">
+              <div class="font-bold">${t.createdByName}</div>
+              <div>Riesgo: ${t.totalScore} Pts</div>
+            </td>
+            <td class="p-3 text-center space-x-1">
+              <button onclick="openEditModal('${t.id}')" title="Editar / Cerrar Retorno" class="bg-blue-100 hover:bg-blue-200 text-blue-700 p-1.5 rounded"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button onclick="printTrip('${t.id}')" title="Imprimir Formato" class="bg-slate-200 hover:bg-slate-300 text-slate-700 p-1.5 rounded"><i class="fa-solid fa-print"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function exportToExcelFormatted() {
+      if(!window.trips || window.trips.length === 0) {
+        alert('No hay información para exportar.');
+        return;
+      }
+
+      const formattedRows = window.trips.map((t, index) => ({
+        "N°": index + 1,
+        "N° PECS": t.pecsNum,
+        "ESTADO VIAJE": t.estado === 'EN_CURSO' ? 'EN CURSO' : 'FINALIZADO',
+        "FECHA SALIDA": t.fechaSalida ? new Date(t.fechaSalida).toLocaleString() : 'N/A',
+        "LÍMITE ESTIMADO": t.fechaSalida ? new Date(new Date(t.fechaSalida).getTime() + (parseInt(t.duracionEstimada || 24) * 3600000)).toLocaleString() : 'N/A',
+        "FECHA RETORNO REAL": t.fechaLlegadaReal ? new Date(t.fechaLlegadaReal).toLocaleString() : 'PENDIENTE',
+        "CONDUCTOR": t.nombreConductor,
+        "SUPERVISOR": t.supervisor,
+        "VEHÍCULO": t.tipoVehiculo,
+        "PLACA": t.placa,
+        "MOTIVO": t.motivo,
+        "PROYECTO": t.proyecto,
+        "ORIGEN": t.lugarSalida,
+        "DESTINO": t.lugarLlegada,
+        "PUNTAJE RIESGO": t.totalScore,
+        "EXCEPCIÓN GERENCIAL": t.totalScore > 30 ? 'REQUIERE APROBACIÓN' : 'NORMAL',
+        "USUARIO REGISTRO": t.createdByName,
+        "CÉDULA REGISTRO": t.createdDni,
+        "NOVEDADES RETORNO": t.observacionesRetorno || 'SIN NOVEDADES'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+
+      const colWidths = [
+        { wch: 4 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 },
+        { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
+        { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+        { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 30 }
+      ];
+      worksheet['!cols'] = colWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Registro PECS RE-LOG-01");
+      XLSX.writeFile(workbook, `Reporte_EnVivo_PECS_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function printTrip(id) {
+      const t = window.trips.find(x => x.id === id);
+      if(!t) return;
+      const area = document.getElementById('printableArea');
+      area.innerHTML = `
+        <div class="p-8 border-2 border-black font-sans text-xs max-w-4xl mx-auto my-4 bg-white">
+          <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
+            <div>
+              <h1 class="text-base font-bold">GERENCIAMIENTO DE VIAJES - PECS RE-LOG-01</h1>
+              <p>DOCUMENTO DE CONTROL LOGÍSTICO Y MATRIZ DE RIESGO</p>
+            </div>
+            <div class="text-right">
+              <span class="text-base font-bold text-red-600">N° PECS: ${t.pecsNum}</span>
+              <p>Fecha: ${new Date(t.fechaSalida).toLocaleDateString()}</p>
+            </div>
+          </div>
+          <table class="w-full border-collapse border border-black mb-4">
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Motivo:</td><td class="border border-black p-1">${t.motivo}</td><td class="border border-black p-1 font-bold bg-slate-100">Proyecto:</td><td class="border border-black p-1">${t.proyecto}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Origen/Destino:</td><td class="border border-black p-1">${t.lugarSalida} ➔ ${t.lugarLlegada}</td><td class="border border-black p-1 font-bold bg-slate-100">Conductor:</td><td class="border border-black p-1">${t.nombreConductor}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Vehículo / Placa:</td><td class="border border-black p-1">${t.tipoVehiculo} (${t.placa})</td><td class="border border-black p-1 font-bold bg-slate-100">Supervisor:</td><td class="border border-black p-1">${t.supervisor}</td></tr>
+            <tr><td class="border border-black p-1 font-bold bg-slate-100">Salida:</td><td class="border border-black p-1">${new Date(t.fechaSalida).toLocaleString()}</td><td class="border border-black p-1 font-bold bg-slate-100">Llegada Real:</td><td class="border border-black p-1">${t.fechaLlegadaReal ? new Date(t.fechaLlegadaReal).toLocaleString() : 'PENDIENTE'}</td></tr>
+          </table>
+          <div class="border border-black p-2 mb-4">
+            <strong>Puntaje de Riesgo Total:</strong> ${t.totalScore} Pts (${t.totalScore > 30 ? 'Requiere Autorización Gerencial' : 'Normal'})
+          </div>
+          <div class="border border-black p-2 mb-6">
+            <strong>Observaciones de Retorno:</strong> ${t.observacionesRetorno || 'Sin novedades'}
+          </div>
+          <div class="grid grid-cols-2 gap-8 text-center pt-8 border-t border-black">
+            <div><div class="border-t border-black pt-1 font-bold">Firma del Conductor</div><div>${t.nombreConductor}</div></div>
+            <div><div class="border-t border-black pt-1 font-bold">Responsable Logístico / SSA</div><div>${t.supervisor}</div></div>
+          </div>
+        </div>
+      `;
+      area.classList.remove('hidden');
+      window.print();
+      area.classList.add('hidden');
+    }
+
+    window.openAuthModal = openAuthModal;
+    window.checkAlerts = checkAlerts;
+    window.calculateRisk = calculateRisk;
+    window.openNewTripModal = openNewTripModal;
+    window.openEditModal = openEditModal;
+    window.closeTripModal = closeTripModal;
+    window.saveTrip = saveTrip;
+    window.renderTable = renderTable;
+    window.exportToExcelFormatted = exportToExcelFormatted;
+    window.printTrip = printTrip;
+  </script>
+</body>
+</html>
