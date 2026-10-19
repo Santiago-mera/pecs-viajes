@@ -41,7 +41,7 @@
           <span id="lblUserName" class="font-bold text-slate-800"></span>
           <span id="lblUserRole" class="text-[10px] text-slate-500 block"></span>
         </div>
-        <button onclick="logout()" class="ml-2 text-red-600 hover:text-red-800 text-xs font-bold"><i class="fa-solid fa-right-from-bracket"></i></button>
+        <button onclick="logout()" class="ml-2 text-red-600 hover:text-red-800 text-xs font-bold" title="Cerrar Sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
       <button id="btnLogin" onclick="openAuthModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow">
         <i class="fa-solid fa-id-card mr-1"></i> Identificarse (Usuario / Chofer)
@@ -97,7 +97,10 @@
   <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
   <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden no-print">
     <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-      <h3 class="font-bold text-sm text-slate-900 border-b pb-2"><i class="fa-solid fa-user-lock text-blue-600 mr-2"></i> Identificación de Usuario</h3>
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-sm text-slate-900"><i class="fa-solid fa-user-lock text-blue-600 mr-2"></i> Identificación de Usuario</h3>
+        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark"></i></button>
+      </div>
       <p class="text-xs text-slate-500">Ingrese su correo electrónico y contraseña asignados para acceder al sistema.</p>
       <div>
         <label class="block font-bold text-[11px] text-slate-700 mb-1">Correo Electrónico *</label>
@@ -338,8 +341,12 @@
               window.renderTable();
             }, (error) => {
               console.error("Error en Firestore:", error);
-              document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
-              document.getElementById('cloudStatusText').textContent = "Error de permisos en la base de datos.";
+              const statusText = document.getElementById('cloudStatusText');
+              const cloudDot = document.getElementById('cloudStatus');
+              if (statusText && cloudDot) {
+                cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
+                statusText.textContent = "Error de permisos en la base de datos.";
+              }
             });
           }
 
@@ -355,8 +362,13 @@
         window.currentUser = null;
         localStorage.removeItem('pecs_user');
         
-        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
-        document.getElementById('cloudStatusText').textContent = "Identifíquese para conectar con la base de datos.";
+        const statusText = document.getElementById('cloudStatusText');
+        const cloudDot = document.getElementById('cloudStatus');
+        if (statusText && cloudDot) {
+          cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+          statusText.className = "text-xs text-amber-600 font-medium";
+          statusText.textContent = "Identifíquese para conectar con la base de datos.";
+        }
       }
       window.updateUserUI();
       window.renderTable();
@@ -366,9 +378,14 @@
     window.loginConFirebase = async function() {
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value;
+      if (!email || !password) {
+        alert("Por favor ingrese correo y contraseña.");
+        return;
+      }
       try {
         await signInWithEmailAndPassword(auth, email, password);
         document.getElementById('authModal').classList.add('hidden');
+        document.getElementById('authPassword').value = '';
       } catch (err) {
         alert("Error de acceso: " + err.message);
       }
@@ -399,13 +416,19 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateUserUI();
+      renderTable();
     });
 
     function openAuthModal() {
-      if(currentUser) {
-        document.getElementById('authEmail').value = currentUser.email || '';
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      if(currentUser && currentUser.email) {
+        document.getElementById('authEmail').value = currentUser.email;
       }
       document.getElementById('authModal').classList.remove('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('authModal').classList.add('hidden');
     }
 
     function updateUserUI() {
@@ -423,7 +446,7 @@
         document.getElementById('lblUserName').textContent = currentUser.name;
         document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.role === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
         
-        if (statusText && cloudDot) {
+        if (statusText && cloudDot && window.trips && window.trips.length > 0) {
           cloudDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
           statusText.className = "text-xs text-emerald-600 font-medium";
           statusText.textContent = "Conectado en tiempo real a la nube";
@@ -443,6 +466,7 @@
 
     function checkAlerts() {
       const banner = document.getElementById('alertsBanner');
+      if (!banner) return;
       banner.innerHTML = '';
       const now = new Date();
       let count = 0;
@@ -482,11 +506,17 @@
 
     function calculateRisk() {
       let total = 0;
-      for(let i=1; i<=8; i++) total += parseInt(document.getElementById(`r${i}`).value || 0);
-      document.getElementById('scoreBadge').textContent = `${total} Pts`;
+      for(let i=1; i<=8; i++) {
+        const el = document.getElementById(`r${i}`);
+        if(el) total += parseInt(el.value || 0);
+      }
+      const badge = document.getElementById('scoreBadge');
+      if(badge) badge.textContent = `${total} Pts`;
       const warning = document.getElementById('gerenciaWarning');
-      if(total > 30) warning.classList.remove('hidden');
-      else warning.classList.add('hidden');
+      if(warning) {
+        if(total > 30) warning.classList.remove('hidden');
+        else warning.classList.add('hidden');
+      }
       return total;
     }
 
@@ -514,14 +544,19 @@
         openAuthModal();
         return;
       }
-      document.getElementById('pecsForm').reset();
-      document.getElementById('formId').value = '';
-      document.getElementById('nombreConductor').value = currentUser.name;
-      document.getElementById('estadoViaje').value = 'EN_CURSO';
+      const form = document.getElementById('pecsForm');
+      if(form) form.reset();
+      const formId = document.getElementById('formId');
+      if(formId) formId.value = '';
+      const conductor = document.getElementById('nombreConductor');
+      if(conductor) conductor.value = currentUser.name;
+      const estado = document.getElementById('estadoViaje');
+      if(estado) estado.value = 'EN_CURSO';
       
       configurarCamposFormulario(false, false);
       calculateRisk();
-      document.getElementById('tripModal').classList.remove('hidden');
+      const modal = document.getElementById('tripModal');
+      if(modal) modal.classList.remove('hidden');
     }
 
     function openEditModal(id) {
@@ -558,7 +593,10 @@
       document.getElementById('supervisor').value = t.supervisor;
 
       if(t.risks) {
-        for(let i=1; i<=8; i++) document.getElementById(`r${i}`).value = t.risks[`r${i}`] || 0;
+        for(let i=1; i<=8; i++) {
+          const el = document.getElementById(`r${i}`);
+          if(el) el.value = t.risks[`r${i}`] || 0;
+        }
       }
 
       document.getElementById('fechaLlegadaReal').value = t.fechaLlegadaReal || '';
@@ -566,13 +604,12 @@
       document.getElementById('observacionesRetorno').value = t.observacionesRetorno || '';
       document.getElementById('estadoViaje').value = t.estado || 'EN_CURSO';
 
-      // Aplicar restricciones de campos según rol y estado
       if (esAdmin) {
-        configurarCamposFormulario(false, false); // Admin edita todo
+        configurarCamposFormulario(false, false);
       } else if (t.estado === 'CERRADO') {
-        configurarCamposFormulario(true, false); // Cerrado: chofer no edita nada
+        configurarCamposFormulario(true, false);
       } else {
-        configurarCamposFormulario(false, true); // En curso: chofer solo edita Fase 2 (retorno)
+        configurarCamposFormulario(false, true);
       }
 
       calculateRisk();
@@ -580,7 +617,8 @@
     }
 
     function closeTripModal() {
-      document.getElementById('tripModal').classList.add('hidden');
+      const modal = document.getElementById('tripModal');
+      if(modal) modal.classList.add('hidden');
     }
 
     async function saveTrip(e) {
@@ -596,16 +634,20 @@
       const departureValue = document.getElementById('fechaSalida').value;
       const arrivalValue = document.getElementById('fechaLlegadaReal').value;
       
-      if (status === 'CERRADO' && (!arrivalValue || !Number.isFinite(new Date(arrivalValue).getTime()) || new Date(arrivalValue) < new Date(departureValue) || new Date(arrivalValue) > new Date())) {
-        alert('Para cerrar el viaje, registre una llegada válida, posterior a la salida y no futura.');
+      if (status === 'CERRADO' && (!arrivalValue || !Number.isFinite(new Date(arrivalValue).getTime()) || new Date(arrivalValue) < new Date(departureValue))) {
+        alert('Para cerrar el viaje, registre una llegada válida y posterior a la fecha de salida.');
         return;
       }
       
-      const id = document.getElementById('formId').value || 'TRIP-' + Date.now();
-      const isNew = !document.getElementById('formId').value;
+      const formIdEl = document.getElementById('formId');
+      const id = (formIdEl && formIdEl.value) ? formIdEl.value : 'TRIP-' + Date.now();
+      const isNew = !(formIdEl && formIdEl.value);
 
       const risks = {};
-      for(let i=1; i<=8; i++) risks[`r${i}`] = document.getElementById(`r${i}`).value;
+      for(let i=1; i<=8; i++) {
+        const el = document.getElementById(`r${i}`);
+        risks[`r${i}`] = el ? el.value : 0;
+      }
 
       const tripData = {
         id,
@@ -642,10 +684,16 @@
 
     function renderTable() {
       const tbody = document.getElementById('tripsTableBody');
+      if(!tbody) return;
       tbody.innerHTML = '';
-      const filter = document.getElementById('filterStatus').value;
-      const search = document.getElementById('searchInput').value.toLowerCase();
+      
+      const filterEl = document.getElementById('filterStatus');
+      const searchEl = document.getElementById('searchInput');
+      const filter = filterEl ? filterEl.value : 'ALL';
+      const search = searchEl ? searchEl.value.toLowerCase() : '';
       const now = new Date();
+
+      if (!window.trips) window.trips = [];
 
       let filtered = window.trips.filter(t => {
         const matchSearch = (t.pecsNum||'').toLowerCase().includes(search) || (t.nombreConductor||'').toLowerCase().includes(search) || (t.placa||'').toLowerCase().includes(search);
@@ -655,7 +703,7 @@
       });
 
       if(filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">No hay registros de viajes en la base de datos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">No hay registros de viajes en la base de datos o no coinciden con la búsqueda.</td></tr>`;
         return;
       }
 
@@ -685,7 +733,7 @@
             </td>
             <td class="p-3">${badge}</td>
             <td class="p-3 text-[10px] text-slate-500">
-              <div class="font-bold">${t.createdByName}</div>
+              <div class="font-bold">${t.createdByName || 'N/A'}</div>
               <div>Riesgo: ${t.totalScore} Pts</div>
             </td>
             <td class="p-3 text-center space-x-1">
@@ -726,15 +774,6 @@
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(formattedRows);
-
-      const colWidths = [
-        { wch: 4 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 },
-        { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
-        { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
-        { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 30 }
-      ];
-      worksheet['!cols'] = colWidths;
-
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Registro PECS RE-LOG-01");
       XLSX.writeFile(workbook, `Reporte_EnVivo_PECS_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -744,6 +783,8 @@
       const t = window.trips.find(x => x.id === id);
       if(!t) return;
       const area = document.getElementById('printableArea');
+      if(!area) return;
+      
       area.innerHTML = `
         <div class="p-8 border-2 border-black font-sans text-xs max-w-4xl mx-auto my-4 bg-white">
           <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
@@ -779,7 +820,9 @@
       area.classList.add('hidden');
     }
 
+    // Exposición global obligatoria de funciones
     window.openAuthModal = openAuthModal;
+    window.closeAuthModal = closeAuthModal;
     window.checkAlerts = checkAlerts;
     window.calculateRisk = calculateRisk;
     window.openNewTripModal = openNewTripModal;
@@ -789,6 +832,7 @@
     window.renderTable = renderTable;
     window.exportToExcelFormatted = exportToExcelFormatted;
     window.printTrip = printTrip;
+    window.updateUserUI = updateUserUI;
   </script>
 </body>
 </html>
