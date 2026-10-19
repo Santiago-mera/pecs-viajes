@@ -107,4 +107,423 @@
         <label class="block font-bold text-[11px] text-slate-700 mb-1">Contraseña *</label>
         <input type="password" id="authPassword" class="w-full text-xs p-2 border border-slate-300 rounded outline-none" placeholder="••••••••">
       </div>
-      <button onclick="loginConFirebase()" class="w-full bg-blue-600 hover:bg-blue-
+      <button onclick="loginConFirebase()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded text-xs shadow">Iniciar Sesión</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE FORMULARIO PECS RE-LOG-01 -->
+  <div id="tripModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 z-40 overflow-y-auto hidden no-print">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full my-6 p-6 space-y-6 text-xs">
+      
+      <div class="flex justify-between items-center border-b pb-3">
+        <div>
+          <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px]">DOCUMENTO No. PECS-RE-LOG-01</span>
+          <h2 id="modalTitle" class="font-bold text-base text-slate-900 mt-1">Gerenciamiento de Viajes (Solicitud de Salida y Retorno)</h2>
+        </div>
+        <button onclick="closeTripModal()" class="text-slate-400 hover:text-slate-700 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="pecsForm" onsubmit="saveTrip(event)" class="space-y-4">
+        <input type="hidden" id="formId">
+
+        <!-- ENCABEZADO SUPERIOR -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+          <div>
+            <label class="font-bold text-slate-700">N° PECS:</label>
+            <input type="text" id="pecsNum" required class="w-full mt-1 p-1.5 border rounded font-bold text-red-600 bg-white" placeholder="0081215">
+          </div>
+          <div class="md:col-span-2">
+            <label class="font-bold text-slate-700">Motivo del Viaje:</label>
+            <input type="text" id="motivo" required class="w-full mt-1 p-1.5 border rounded bg-white">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700">Proyecto:</label>
+            <input type="text" id="proyecto" required class="w-full mt-1 p-1.5 border rounded bg-white">
+          </div>
+        </div>
+
+        <!-- FASE 1: SALIDA -->
+        <div class="border border-blue-200 bg-blue-50/20 p-3 rounded space-y-3">
+          <h3 class="font-bold text-blue-900 border-b border-blue-200 pb-1 text-xs flex justify-between">
+            <span><i class="fa-solid fa-plane-departure mr-1"></i> FASE 1: Datos de Salida (Llenado por Solicitante/Chofer)</span>
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Lugar de Salida:</label>
+              <input type="text" id="lugarSalida" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Lugar de Llegada (Destino):</label>
+              <input type="text" id="lugarLlegada" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Fecha y Hora Salida:</label>
+              <input type="datetime-local" id="fechaSalida" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 text-blue-700">Duración Estimada Viaje:</label>
+              <select id="duracionEstimada" required onchange="calculateRisk()" class="w-full mt-1 p-1.5 border rounded font-bold bg-white">
+                <option value="6">6 Horas</option>
+                <option value="12">12 Horas</option>
+                <option value="24" selected>1 Día (24 Horas)</option>
+                <option value="48">2 Días (48 Horas)</option>
+                <option value="72">3 Días (72 Horas)</option>
+                <option value="120">5 Días (120 Horas)</option>
+                <option value="168">1 Semana (168 Horas)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Tipo de Vehículo:</label>
+              <input type="text" id="tipoVehiculo" required class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Ej. Camioneta 4x4">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Número de Placa:</label>
+              <input type="text" id="placa" required class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Ej. MBA-1234">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Pre Inspección (S/N):</label>
+              <select id="preInspeccion" class="w-full mt-1 p-1.5 border rounded bg-white">
+                <option value="SI">SI</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">N° Pasajeros:</label>
+              <input type="number" id="numPasajeros" min="1" value="1" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Vehículo Satelital (S/N):</label>
+              <select id="satelital" class="w-full mt-1 p-1.5 border rounded bg-white">
+                <option value="SI">SI</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Nombre del Conductor:</label>
+              <input type="text" id="nombreConductor" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Supervisor a Cargo:</label>
+              <input type="text" id="supervisor" required class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- MATRIZ DE RIESGOS -->
+        <div class="border border-slate-300 p-3 rounded space-y-2 bg-white">
+          <div class="flex justify-between items-center border-b pb-1">
+            <span class="font-bold text-slate-800">Condiciones para Determinar el Nivel de Riesgo y Aprobación</span>
+            <span id="scoreBadge" class="font-black bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">0 Pts</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <select id="r1" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">1. Normal (0 pts)</option><option value="5">1. Se requiere acompañante / otro chofer (5 pts)</option></select>
+            <select id="r2" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">2. Clima Normal (0 pts)</option><option value="1">2. Lluvioso (1 pt)</option><option value="2">2. Neblina / Viento / Polvo (2 pts)</option></select>
+            <select id="r3" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">3. Comunicaciones en todo el trayecto (1 pt)</option><option value="3">3. Sin medio pero viaja con otro vehículo (3 pts)</option><option value="5">3. Sin medio de comunicación y viaja solo (5 pts)</option></select>
+            <select id="r4" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">4. Carga Normal (0 pts)</option><option value="1">4. Extra dimensional / pesada (1 pt)</option><option value="2">2. Requiere vehículo guía (2 pts)</option><option value="5">4. Desecho peligroso / permiso (5 pts)</option></select>
+            <select id="r5" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="3">5. Menos de 200 km (3 pts)</option><option value="5">5. Más de 200 km (5 pts)</option></select>
+            <select id="r6" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">6. Conductor nuevo en ruta (1 pt)</option><option value="3">6. Vías doble sentido / estrechas / barro (3 pts)</option><option value="5">6. Cruce en barcazas / gabarras (5 pts)</option></select>
+            <select id="r7" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">7. Manejo diurno (0 pts)</option><option value="3">7. Manejo nocturno 11h00-14h00 / 03h00-04h30 (3 pts)</option><option value="8">7. Manejo nocturno 19h30-04h30 - Excepción (8 pts)</option></select>
+            <select id="r8" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">8. Horas normales (0 pts)</option><option value="8">8. Viaje excede 16 horas acumuladas (8 pts)</option></select>
+          </div>
+          <div id="gerenciaWarning" class="hidden bg-red-100 text-red-800 p-2 rounded text-[11px] font-bold">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i> El puntaje supera los 30 puntos. Se requiere Autorización Excepcional Gerencial obligatoria.
+          </div>
+        </div>
+
+        <!-- FASE 2: RETORNO Y CIERRE -->
+        <div id="fase2Box" class="border border-emerald-300 bg-emerald-50/30 p-3 rounded space-y-3">
+          <h3 class="font-bold text-emerald-900 border-b border-emerald-200 pb-1 text-xs">
+            <i class="fa-solid fa-plane-arrival mr-1"></i> FASE 2: Registro de Retorno y Cierre (Completar al Regresar)
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div>
+              <label class="font-bold text-slate-700">Fecha y Hora Real de Llegada:</label>
+              <input type="datetime-local" id="fechaLlegadaReal" class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Horas de Parada / Descanso:</label>
+              <input type="number" id="horasParada" min="0" value="0" class="w-full mt-1 p-1.5 border rounded bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700">Estado del Viaje:</label>
+              <select id="estadoViaje" class="w-full mt-1 p-1.5 border rounded font-bold bg-white">
+                <option value="EN_CURSO" class="text-amber-600">EN CURSO (Pendiente de Regreso)</option>
+                <option value="CERRADO" class="text-emerald-600">CERRADO (Viaje Finalizado)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="font-bold text-slate-700">Observaciones / Novedades del Retorno:</label>
+            <textarea id="observacionesRetorno" rows="2" class="w-full mt-1 p-1.5 border rounded bg-white" placeholder="Registre novedades a la llegada..."></textarea>
+          </div>
+        </div>
+
+        <!-- BOTONES -->
+        <div class="flex justify-end gap-2 pt-2 border-t">
+          <button type="button" onclick="closeTripModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 font-bold rounded">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow"><i class="fa-solid fa-floppy-disk mr-1"></i> Guardar Registro En Vivo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- VISTA PARA IMPRESIÓN OFICIAL -->
+  <div id="printableArea" class="hidden"></div>
+
+  <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) CON CREDENCIALES REALES -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    // Configuración de tu base de datos (Credenciales reales integradas)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzKk-DRT5Q8NPUADp4tz3cl4SlMPhxOoU",
+      authDomain: "pecs-viajes-app-ae198.firebaseapp.com",
+      databaseURL: "https://pecs-viajes-app-ae198-default-rtdb.firebaseio.com",
+      projectId: "pecs-viajes-app-ae198",
+      storageBucket: "pecs-viajes-app-ae198.firebasestorage.app",
+      messagingSenderId: "182123688537",
+      appId: "1:182123688537:web:9e0fa31f598c0000fef748"
+    };
+
+    // Inicialización de servicios
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const tripsCollection = collection(db, "viajes_pecs");
+
+    let tripsUnsubscribe = null; // Controla el oyente de base de datos activo
+
+    // DETECTAR SESIÓN Y EXTRAER EL ROL DEL USUARIO EN FIRESTORE
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDocRef = doc(db, "usuarios", user.uid);
+          const userSnap = await getDoc(userDocRef);
+          
+          let userRole = "CHOFER"; 
+          let userName = user.email.split('@')[0]; 
+
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            userRole = data.rol || "CHOFER";
+            userName = data.nombre || userName;
+          }
+
+          window.currentUser = { dni: user.uid, name: userName, role: userRole, permission: userRole };
+          localStorage.setItem('pecs_user', JSON.stringify(window.currentUser));
+
+          // INICIAR EL OYENTE SOLO DESPUÉS DE VALIDAR LA SESIÓN
+          if (!tripsUnsubscribe) {
+            tripsUnsubscribe = onSnapshot(tripsCollection, (snapshot) => {
+              window.trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              window.trips.sort((a,b) => new Date(b.fechaSalida) - new Date(a.fechaSalida));
+              
+              document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+              document.getElementById('cloudStatusText').className = "text-xs text-emerald-600 font-medium";
+              document.getElementById('cloudStatusText').textContent = "Conectado en tiempo real a la nube";
+
+              window.checkAlerts();
+              window.renderTable();
+            }, (error) => {
+              console.error("Error en Firestore:", error);
+              document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500";
+              document.getElementById('cloudStatusText').textContent = "Error de permisos en la base de datos.";
+            });
+          }
+
+        } catch (error) { 
+          console.error("Error de sesión:", error); 
+        }
+      } else {
+        // Si el usuario cierra sesión, apagamos el oyente de Firestore
+        if (tripsUnsubscribe) {
+          tripsUnsubscribe();
+          tripsUnsubscribe = null;
+        }
+        window.currentUser = null;
+        localStorage.removeItem('pecs_user');
+        
+        document.getElementById('cloudStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+        document.getElementById('cloudStatusText').textContent = "Identifíquese para conectar con la base de datos.";
+      }
+      window.updateUserUI();
+      window.renderTable();
+    });
+
+    // Funciones globales expuestas al navegador
+    window.loginConFirebase = async function() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        document.getElementById('authModal').classList.add('hidden');
+      } catch (err) {
+        alert("Error de acceso: " + err.message);
+      }
+    };
+
+    window.logout = async function() {
+      if(confirm('¿Desea cerrar sesión?')) {
+        await signOut(auth);
+      }
+    };
+
+    window.saveTripToFirebase = async function(tripData) {
+      try {
+        const docRef = doc(db, "viajes_pecs", tripData.id);
+        await setDoc(docRef, tripData, { merge: true });
+        return true;
+      } catch (err) {
+        alert("Error en la base de datos: " + err.message);
+        return false;
+      }
+    };
+  </script>
+
+  <!-- LÓGICA DE LA APLICACIÓN -->
+  <script>
+    let currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+    window.trips = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateUserUI();
+    });
+
+    function openAuthModal() {
+      if(currentUser) {
+        document.getElementById('authEmail').value = currentUser.email || '';
+      }
+      document.getElementById('authModal').classList.remove('hidden');
+    }
+
+    function updateUserUI() {
+      const badge = document.getElementById('userBadge');
+      const btnLogin = document.getElementById('btnLogin');
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      
+      if(currentUser) {
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+        btnLogin.classList.add('hidden');
+        document.getElementById('lblUserName').textContent = currentUser.name;
+        document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.role === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
+      } else {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+        btnLogin.classList.remove('hidden');
+      }
+    }
+
+    function checkAlerts() {
+      const banner = document.getElementById('alertsBanner');
+      banner.innerHTML = '';
+      const now = new Date();
+      let count = 0;
+
+      window.trips.forEach(t => {
+        if(t.estado === 'EN_CURSO') {
+          const departure = new Date(t.fechaSalida);
+          const limit = new Date(departure.getTime() + (parseInt(t.duracionEstimada || 24) * 3600000));
+          const diffHours = (limit - now) / 3600000;
+
+          if(diffHours < 0) {
+            count++;
+            banner.innerHTML += `
+              <div class="bg-red-50 border-l-4 border-red-600 p-3 rounded shadow-sm mb-2 flex justify-between items-center text-xs">
+                <div>
+                  <strong class="text-red-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ¡ALERTA DE VIAJE VENCIDO!</strong>
+                  <p class="text-red-700">El viaje PECS N° <strong>${t.pecsNum}</strong> asignado a <strong>${t.nombreConductor}</strong> excedió su tiempo estimado de retorno (${limit.toLocaleString()}). ¡Debe cerrarse!</p>
+                </div>
+                <button onclick="openEditModal('${t.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-bold">Registrar Retorno</button>
+              </div>`;
+          } else if(diffHours <= 6) {
+            count++;
+            banner.innerHTML += `
+              <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded shadow-sm mb-2 flex justify-between items-center text-xs">
+                <div>
+                  <strong class="text-amber-800"><i class="fa-solid fa-bell mr-1"></i> Recordatorio de Retorno Próximo</strong>
+                  <p class="text-amber-700">El viaje PECS N° <strong>${t.pecsNum}</strong> (${t.nombreConductor}) está próximo a cumplir su tiempo límite (${Math.round(diffHours)} horas restantes).</p>
+                </div>
+                <button onclick="openEditModal('${t.id}')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-bold">Ver / Cerrar</button>
+              </div>`;
+          }
+        }
+      });
+      if(count > 0) banner.classList.remove('hidden');
+      else banner.classList.add('hidden');
+    }
+
+    function calculateRisk() {
+      let total = 0;
+      for(let i=1; i<=8; i++) total += parseInt(document.getElementById(`r${i}`).value || 0);
+      document.getElementById('scoreBadge').textContent = `${total} Pts`;
+      const warning = document.getElementById('gerenciaWarning');
+      if(total > 30) warning.classList.remove('hidden');
+      else warning.classList.add('hidden');
+      return total;
+    }
+
+    function configurarCamposFormulario(bloquearTodo, bloquearFase1Solo) {
+      const fase1Ids = ["pecsNum", "motivo", "proyecto", "lugarSalida", "lugarLlegada", "fechaSalida", "duracionEstimada", "tipoVehiculo", "placa", "preInspeccion", "numPasajeros", "satelital", "nombreConductor", "supervisor", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8"];
+      const fase2Ids = ["fechaLlegadaReal", "horasParada", "observacionesRetorno", "estadoViaje"];
+      
+      fase1Ids.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.disabled = bloquearTodo || bloquearFase1Solo;
+      });
+      fase2Ids.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.disabled = bloquearTodo;
+      });
+      
+      const btnGuardar = document.querySelector("#pecsForm button[type='submit']");
+      if (btnGuardar) btnGuardar.style.display = bloquearTodo ? "none" : "block";
+    }
+
+    function openNewTripModal() {
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      if(!currentUser) {
+        alert('Debe iniciar sesión primero.');
+        openAuthModal();
+        return;
+      }
+      document.getElementById('pecsForm').reset();
+      document.getElementById('formId').value = '';
+      document.getElementById('nombreConductor').value = currentUser.name;
+      document.getElementById('estadoViaje').value = 'EN_CURSO';
+      
+      configurarCamposFormulario(false, false);
+      calculateRisk();
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+      const t = window.trips.find(x => x.id === id);
+      if(!t) return;
+
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      if(!currentUser) {
+        alert('Debe iniciar sesión primero.');
+        openAuthModal();
+        return;
+      }
+
+      const esAdmin = currentUser.role === 'ADMIN';
+      if (!esAdmin && t.createdDni !== currentUser.dni) {
+        alert('SEGURIDAD: No está autorizado para modificar un viaje registrado por otro usuario.');
+        return;
+      }
+
+      document.getElementById('formId').value = t.id;
+      document.getElementById('pecsNum').value = t.pecsNum;
+      document.getElementById('motivo').value = t.motivo;
+      document.getElementById('proyecto').value = t.proyecto;
+      document.getElementById('
