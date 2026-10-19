@@ -55,19 +55,10 @@
   <!-- PANEL DE GESTIÓN Y ACCIONES RÁPIDAS -->
   <div class="max-w-6xl mx-auto bg-white p-4 rounded-xl shadow-sm border border-slate-300 mb-6 flex flex-wrap justify-between items-center gap-4 no-print">
     <div class="flex gap-2">
-      <button onclick="openNewTripModal()" configurarCamposFormulario(false, false);
- class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+      <button onclick="openNewTripModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
         <i class="fa-solid fa-plus"></i> Nueva Solicitud de Viaje (Fase 1)
       </button>
-      <button onclick="exportToExcelFormatted()" const esAdmin = currentUser && currentUser.role === 'ADMIN';
-if (esAdmin) {
-  configurarCamposFormulario(false, false); // El administrador puede editar todo siempre
-} else if (t.estado === 'CERRADO') {
-  configurarCamposFormulario(true, false); // Si está cerrado, el chofer no edita nada
-} else {
-  configurarCamposFormulario(false, true); // Si está en curso, el chofer solo edita la Fase 2 (Retorno)
-}
- class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+      <button onclick="exportToExcelFormatted()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
         <i class="fa-solid fa-file-excel"></i> Exportar a Excel Formateado (.xlsx)
       </button>
     </div>
@@ -103,8 +94,7 @@ if (esAdmin) {
     </div>
   </div>
 
-    <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
-    <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
+  <!-- MODAL DE IDENTIFICACIÓN DE USUARIO -->
   <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden no-print">
     <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
       <h3 class="font-bold text-sm text-slate-900 border-b pb-2"><i class="fa-solid fa-user-lock text-blue-600 mr-2"></i> Identificación de Usuario</h3>
@@ -235,7 +225,7 @@ if (esAdmin) {
             <select id="r1" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">1. Normal (0 pts)</option><option value="5">1. Se requiere acompañante / otro chofer (5 pts)</option></select>
             <select id="r2" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">2. Clima Normal (0 pts)</option><option value="1">2. Lluvioso (1 pt)</option><option value="2">2. Neblina / Viento / Polvo (2 pts)</option></select>
             <select id="r3" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">3. Comunicaciones en todo el trayecto (1 pt)</option><option value="3">3. Sin medio pero viaja con otro vehículo (3 pts)</option><option value="5">3. Sin medio de comunicación y viaja solo (5 pts)</option></select>
-            <select id="r4" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">4. Carga Normal (0 pts)</option><option value="1">4. Extra dimensional / pesada (1 pt)</option><option value="2">4. Requiere vehículo guía (2 pts)</option><option value="5">4. Desecho peligroso / permiso (5 pts)</option></select>
+            <select id="r4" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">4. Carga Normal (0 pts)</option><option value="1">4. Extra dimensional / pesada (1 pt)</option><option value="2">2. Requiere vehículo guía (2 pts)</option><option value="5">4. Desecho peligroso / permiso (5 pts)</option></select>
             <select id="r5" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="3">5. Menos de 200 km (3 pts)</option><option value="5">5. Más de 200 km (5 pts)</option></select>
             <select id="r6" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="1">6. Conductor nuevo en ruta (1 pt)</option><option value="3">6. Vías doble sentido / estrechas / barro (3 pts)</option><option value="5">6. Cruce en barcazas / gabarras (5 pts)</option></select>
             <select id="r7" onchange="calculateRisk()" class="p-1 border rounded text-[11px] bg-slate-50"><option value="0">7. Manejo diurno (0 pts)</option><option value="3">7. Manejo nocturno 11h00-14h00 / 03h00-04h30 (3 pts)</option><option value="8">7. Manejo nocturno 19h30-04h30 - Excepción (8 pts)</option></select>
@@ -287,7 +277,6 @@ if (esAdmin) {
   <div id="printableArea" class="hidden"></div>
 
   <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) -->
-    <!-- INTEGRACIÓN CON FIREBASE MODULAR (SDK v10) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -313,12 +302,11 @@ if (esAdmin) {
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // Buscamos el documento del usuario en la colección "usuarios" usando su UID
           const userDocRef = doc(db, "usuarios", user.uid);
           const userSnap = await getDoc(userDocRef);
           
-          let userRole = "CHOFER"; // Rol por defecto
-          let userName = user.email.split('@')[0]; // Nombre por defecto si no está en base de datos
+          let userRole = "CHOFER"; 
+          let userName = user.email.split('@')[0]; 
 
           if (userSnap.exists()) {
             const data = userSnap.data();
@@ -326,7 +314,6 @@ if (esAdmin) {
             userName = data.nombre || userName;
           }
 
-          // Asignamos el objeto de sesión con el rol real obtenido
           window.currentUser = { 
             dni: user.uid, 
             name: userName, 
@@ -339,7 +326,6 @@ if (esAdmin) {
           console.error("Error al obtener rol del usuario:", error);
         }
       } else {
-        // Limpiamos sesión local si se desloguea
         window.currentUser = null;
         localStorage.removeItem('pecs_user');
       }
@@ -395,14 +381,9 @@ if (esAdmin) {
     };
   </script>
 
-
-
-
   <!-- LÓGICA DE LA APLICACIÓN -->
   <script>
     let currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
-    // Las sesiones locales no acreditan privilegios administrativos.
-    if (currentUser) currentUser.permission = 'USER';
     window.trips = [];
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -411,53 +392,26 @@ if (esAdmin) {
 
     function openAuthModal() {
       if(currentUser) {
-        document.getElementById('authDni').value = currentUser.dni || '';
-        document.getElementById('authName').value = currentUser.name || '';
-        document.getElementById('authRole').value = currentUser.role || '';
-        document.getElementById('authPermission').value = 'USER';
+        document.getElementById('authEmail').value = currentUser.email || '';
       }
       document.getElementById('authModal').classList.remove('hidden');
-    }
-
-    function saveUserSession() {
-      const dni = document.getElementById('authDni').value.trim();
-      const name = document.getElementById('authName').value.trim();
-      const role = document.getElementById('authRole').value.trim();
-      const permission = 'USER'; // La interfaz pública nunca concede ADMIN
-
-      if(!dni || !name || !role) {
-        alert('Por favor complete todos los campos de identificación.');
-        return;
-      }
-      currentUser = { dni, name, role, permission };
-      localStorage.setItem('pecs_user', JSON.stringify(currentUser));
-      updateUserUI();
-      document.getElementById('authModal').classList.add('hidden');
-      renderTable();
-    }
-
-    function logout() {
-      if(confirm('¿Desea cerrar sesión?')) {
-        currentUser = null;
-        localStorage.removeItem('pecs_user');
-        updateUserUI();
-        renderTable();
-      }
     }
 
     function updateUserUI() {
       const badge = document.getElementById('userBadge');
       const btnLogin = document.getElementById('btnLogin');
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      
       if(currentUser) {
         badge.classList.remove('hidden');
         badge.classList.add('flex');
         btnLogin.classList.add('hidden');
         document.getElementById('lblUserName').textContent = currentUser.name;
-        document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.permission === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
+        document.getElementById('lblUserRole').textContent = `${currentUser.role} (${currentUser.role === 'ADMIN' ? 'Supervisor' : 'Chofer'})`;
       } else {
         badge.classList.add('hidden');
         badge.classList.remove('flex');
-        btnLogin.classList.remove('hidden');
+        btnLogin.classList.add('hidden');
       }
     }
 
@@ -510,9 +464,21 @@ if (esAdmin) {
       return total;
     }
 
+    function configurarCamposFormulario(bloquearTodo, bloquearFase1Solo) {
+      const fase1Ids = ["pecsNum", "motivo", "proyecto", "lugarSalida", "lugarLlegada", "fechaSalida", "duracionEstimada", "tipoVehiculo", "placa", "preInspeccion", "numPasajeros", "satelital", "nombreConductor", "supervisor", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8"];
+      const fase2Ids = ["fechaLlegadaReal", "horasParada", "observacionesRetorno", "estadoViaje"];
+      
+      fase1Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo || bloquearFase1Solo);
+      fase2Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo);
+      
+      const btnGuardar = document.querySelector("#pecsForm button[type='submit']");
+      if (btnGuardar) btnGuardar.style.display = bloquearTodo ? "none" : "block";
+    }
+
     function openNewTripModal() {
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
       if(!currentUser) {
-        alert('Debe identificarse primero con su documento de identidad.');
+        alert('Debe iniciar sesión primero.');
         openAuthModal();
         return;
       }
@@ -520,6 +486,8 @@ if (esAdmin) {
       document.getElementById('formId').value = '';
       document.getElementById('nombreConductor').value = currentUser.name;
       document.getElementById('estadoViaje').value = 'EN_CURSO';
+      
+      configurarCamposFormulario(false, false);
       calculateRisk();
       document.getElementById('tripModal').classList.remove('hidden');
     }
@@ -528,7 +496,15 @@ if (esAdmin) {
       const t = window.trips.find(x => x.id === id);
       if(!t) return;
 
-      if(!currentUser || (t.createdDni !== currentUser.dni)) {
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
+      if(!currentUser) {
+        alert('Debe iniciar sesión primero.');
+        openAuthModal();
+        return;
+      }
+
+      const esAdmin = currentUser.role === 'ADMIN';
+      if (!esAdmin && t.createdDni !== currentUser.dni) {
         alert('SEGURIDAD: No está autorizado para modificar un viaje registrado por otro usuario.');
         return;
       }
@@ -558,6 +534,15 @@ if (esAdmin) {
       document.getElementById('observacionesRetorno').value = t.observacionesRetorno || '';
       document.getElementById('estadoViaje').value = t.estado || 'EN_CURSO';
 
+      // Aplicar restricciones de campos según rol y estado
+      if (esAdmin) {
+        configurarCamposFormulario(false, false); // Admin edita todo
+      } else if (t.estado === 'CERRADO') {
+        configurarCamposFormulario(true, false); // Cerrado: chofer no edita nada
+      } else {
+        configurarCamposFormulario(false, true); // En curso: chofer solo edita Fase 2 (retorno)
+      }
+
       calculateRisk();
       document.getElementById('tripModal').classList.remove('hidden');
     }
@@ -568,8 +553,9 @@ if (esAdmin) {
 
     async function saveTrip(e) {
       e.preventDefault();
+      currentUser = JSON.parse(localStorage.getItem('pecs_user')) || null;
       if(!currentUser) {
-        alert('Debe identificarse antes de guardar.');
+        alert('Debe iniciar sesión antes de guardar.');
         openAuthModal();
         return;
       }
@@ -577,10 +563,12 @@ if (esAdmin) {
       const status = document.getElementById('estadoViaje').value;
       const departureValue = document.getElementById('fechaSalida').value;
       const arrivalValue = document.getElementById('fechaLlegadaReal').value;
+      
       if (status === 'CERRADO' && (!arrivalValue || !Number.isFinite(new Date(arrivalValue).getTime()) || new Date(arrivalValue) < new Date(departureValue) || new Date(arrivalValue) > new Date())) {
         alert('Para cerrar el viaje, registre una llegada válida, posterior a la salida y no futura.');
         return;
       }
+      
       const id = document.getElementById('formId').value || 'TRIP-' + Date.now();
       const isNew = !document.getElementById('formId').value;
 
@@ -760,7 +748,6 @@ if (esAdmin) {
     }
 
     window.openAuthModal = openAuthModal;
-    window.saveUserSession = saveUserSession;
     window.logout = logout;
     window.checkAlerts = checkAlerts;
     window.calculateRisk = calculateRisk;
@@ -771,18 +758,6 @@ if (esAdmin) {
     window.renderTable = renderTable;
     window.exportToExcelFormatted = exportToExcelFormatted;
     window.printTrip = printTrip;
-function configurarCamposFormulario(bloquearTodo, bloquearFase1Solo) {
-  const fase1Ids = ["pecsNum", "motivo", "proyecto", "lugarSalida", "lugarLlegada", "fechaSalida", "duracionEstimada", "tipoVehiculo", "placa", "preInspeccion", "numPasajeros", "satelital", "nombreConductor", "supervisor", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8"];
-  const fase2Ids = ["fechaLlegadaReal", "horasParada", "observacionesRetorno", "estadoViaje"];
-  
-  fase1Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo || bloquearFase1Solo);
-  fase2Ids.forEach(id => document.getElementById(id).disabled = bloquearTodo);
-  
-  const btnGuardar = document.querySelector("#pecsForm button[type='submit']");
-  if (btnGuardar) btnGuardar.style.display = bloquearTodo ? "none" : "block";
-}
-
-
   </script>
 </body>
 </html>
