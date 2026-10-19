@@ -321,22 +321,27 @@
         document.getElementById('cloudStatus').className = 'inline-block w-2.5 h-2.5 rounded-full bg-amber-400';
         return;
       }
+      // Mostrar la sesión inmediatamente; Firestore no debe bloquear la interfaz.
       let role = 'CHOFER';
       let name = user.displayName || user.email?.split('@')[0] || 'Usuario';
-      try {
-        const profile = await getDoc(doc(db, 'usuarios', user.uid));
-        if (profile.exists()) {
-          role = String(profile.data().rol || role).toUpperCase();
-          name = profile.data().nombre || name;
-        }
-      } catch (error) {
-        console.warn('No se pudo cargar el perfil de Firestore; se mantiene la sesión:', error);
-      }
-      if (sequence !== authSequence || auth.currentUser?.uid !== user.uid) return;
       window.currentUser = { dni: user.uid, email: user.email, name, role, permission: role };
       window.authReady = true;
       window.updateUserUI();
       window.renderTable();
+      document.getElementById('cloudStatusText').textContent = 'Sesión iniciada. Sincronizando viajes...';
+
+      // La carga del perfil es independiente y no impide crear solicitudes.
+      getDoc(doc(db, 'usuarios', user.uid)).then(profile => {
+        if (sequence !== authSequence || auth.currentUser?.uid !== user.uid) return;
+        if (profile.exists()) {
+          role = String(profile.data().rol || role).toUpperCase();
+          name = profile.data().nombre || name;
+          window.currentUser = { dni: user.uid, email: user.email, name, role, permission: role };
+          window.updateUserUI();
+        }
+      }).catch(error => {
+        console.warn('Perfil no disponible; se mantiene la sesión autenticada:', error);
+      });
       tripsUnsubscribe = onSnapshot(tripsCollection, snapshot => {
         if (sequence !== authSequence) return;
         window.trips = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
@@ -366,7 +371,11 @@
         return;
       }
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        const credential = await signInWithEmailAndPassword(auth, email, password);
+        const user = credential.user;
+        window.currentUser = { dni: user.uid, email: user.email, name: user.displayName || user.email?.split('@')[0] || 'Usuario', role: 'CHOFER', permission: 'CHOFER' };
+        window.authReady = true;
+        window.updateUserUI();
         document.getElementById('authModal').classList.add('hidden');
         document.getElementById('authPassword').value = '';
       } catch (err) {
